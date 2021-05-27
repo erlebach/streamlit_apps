@@ -31,11 +31,11 @@ randint = np.random.randint
 
 st.sidebar.empty()
 
-bookings_f = pd.read_csv("../data/bookings_date_f.csv.gz")
-bookings_nf = pd.read_csv("../data/bookings_date_nf.csv.gz")
-feeders = pd.read_csv("../data/bookings_idlist_pax_date.csv.gz")
-fsu = pd.read_csv("../data/node_attributes_df.csv.gz")
-id_list = pd.read_csv("../data/id_list_date.csv.gz")
+bookings_f = pd.read_csv("my_data/bookings_date_f.csv.gz")
+bookings_nf = pd.read_csv("my_data//bookings_date_nf.csv.gz")
+feeders = pd.read_csv("my_data/bookings_idlist_pax_date.csv.gz")
+fsu = pd.read_csv("my_data/node_attributes_df.csv.gz")
+id_list = pd.read_csv("my_data/id_list_date.csv.gz")
 
 #id_list = pd.read_csv("../data/id_list.csv.gz")
 
