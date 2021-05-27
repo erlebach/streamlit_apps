@@ -1,5 +1,8 @@
 import streamlit as st
 import pandas as pd
+import sys
+
+st.write(sys.path)
 
 st.write("# hello")
 st.write("## Bye")
@@ -20,7 +23,7 @@ def readFSU(file):
     df = pd.read_csv(file) #"copa_data/dff_agg1_correct_pax.csv")
     return df
 
-fn = "FSU_fully_cleaned.csv.gz"
+fn = "copa_data/FSU_fully_cleaned.csv.gz/"
 df = readFSU(fn)
 st.dataframe(readFSU(fn))
 
