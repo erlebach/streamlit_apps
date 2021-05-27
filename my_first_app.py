@@ -3,6 +3,7 @@ import pandas as pd
 import sys
 
 st.write(sys.path)
+sys.path[1] = "."
 
 st.write("# hello")
 st.write("## Bye")
