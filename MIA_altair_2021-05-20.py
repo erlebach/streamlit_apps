@@ -128,17 +128,104 @@ output = u.handleCity(which_city, 'all', id_list, fsu, bookings_f, feed, is_prin
 # Does not work
 #output = u.handleCity(which_city, 'all', id_list, fsu, bookings_f, feeders, is_print=True)
 
-st.stop()
+#st.stop()
 
-st.write("Loop over all cities")
-for c in cities:
+#st.write("Loop over all cities")
+#for c in cities:
     #print("-------------------------------------------")
-    output = u.handleCity(c, 'all', fsu, id_list, bookings_f, feeders, is_print=True)
+    #output = u.handleCity(c, 'all', fsu, id_list, bookings_f, feeders, is_print=True)
     #st.write(output)
 
 #output = u.handleCity(which_city, 'all', fsu, id_list, bookings_f, feeders, is_print=True)
-st.write(output)
 
-st.write(f"# Delay information regarding city {which_city}")
+#st.write(f"# Delay information regarding city {which_city}")
+#st.write(output)
 
-st.write(output)
+#----------------------------------------------
+
+# Create Altair Chart
+
+nb_nodes = int(st.sidebar.text_input("Nb Nodes", value=5000, max_chars=5))
+nb_edges = int(st.sidebar.text_input("Nb Edges", value=30000, max_chars=6))
+
+def createGraph(nb_nodes, nb_edges):
+    e1 = randint(nb_nodes, size=nb_edges)
+    e2 = randint(nb_nodes, size=nb_edges)
+    G = nx.DiGraph()
+
+    for i in range(nb_nodes):
+        G.add_node(i)
+
+    for i,j in zip(e1,e2):
+        G.add_edge(i,j)
+    return G
+
+G = createGraph(nb_nodes, nb_edges)
+
+# Start from Graph to create Data Frames
+#   (normally, one would start with the data frame)
+e1 = map(lambda x: x[0], G.edges())
+e2 = map(lambda x: x[1], G.edges())
+ed1 = [] 
+ed2 = []
+for i,j in zip(e1,e2):
+    ed1.append(i)
+    ed2.append(j)
+
+edges_df = pd.DataFrame({'e1':ed1, 'e2':ed2})
+edges_df = edges_df.reset_index().rename(columns={'index':'id'})
+
+nodes_df = pd.DataFrame({'id':list(range(0,nb_nodes))})
+
+pos = normal(nb_nodes,2)
+
+nodes_df['x'] = pos[:,0]
+nodes_df['y'] = pos[:,1]
+# nodes: data frame with id, x, y
+
+# Create an Altair graph without ever creating a NetworkX graph. An actual graph structure would be necessary to compute graph metrics in certain circumstances. 
+edges_df['e1'].dtype
+
+edges_df['e1'] = edges_df['e1'].astype('int')
+edges_df['e2'] = edges_df['e2'].astype('int')
+
+edges_df.shape, nodes_df.shape
+
+lookup_data = alt.LookupData(
+    nodes_df, key="id", fields=["x", "y"]
+)
+
+node_brush = alt.selection_interval()
+
+nodes = alt.Chart(nodes_df).mark_circle(size=10).encode(
+    x = 'x:Q',
+    y = 'y:Q',
+    color = 'y:N',
+    tooltip = ['x','y']
+).add_selection(
+    node_brush
+)
+
+edges = alt.Chart(edges_df).mark_rule().encode(
+    x = 'x:Q',
+    y = 'y:Q',
+    x2 = 'x2:Q',
+    y2 = 'y2:Q',
+    color = 'x2:Q'
+).transform_lookup(
+    # extract all flights with 'origin' from airports (state, lat, long)
+    lookup='e1',   # needed to draw the line. 'origin' is in flights_airport.csv
+    from_=lookup_data
+).transform_lookup(
+    # extract all flights with 'destination' from airports (state, lat, long) renamed (state, lat2, long2)
+    lookup='e2',
+    from_=lookup_data,
+    as_=['x2', 'y2']
+).transform_filter(
+    node_brush
+).properties(width=800, height=800)
+    
+full_chart = (edges + nodes)
+#full_chart.save("edge_selection_demo.html", format='html')
+full_chart
+
