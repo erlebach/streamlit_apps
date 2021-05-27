@@ -9,6 +9,8 @@
 
 import streamlit as st
 import sys
+st.write(sys.path)
+sys.path[1] = "."
 
 from src.template import *
 
