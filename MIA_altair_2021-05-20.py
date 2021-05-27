@@ -134,16 +134,14 @@ if day != default_day:
 # Return dictionary
 dfs = u.handleCity(which_city, 'all', id_list, fsu, bookings_f, feed, is_print=False, delay=delay)
 
-col1.write(f"dfs:  {dfs}")
 if dfs != None:
     col1.write(f"dfs.keys: {dfs.keys()}")
     col1.write(f"dfs.keys: {list(dfs.keys())}")
 
-if dfs != None:
     key = st.sidebar.selectbox("Flight Keys: ", list(dfs.keys()))
     col1.dataframe(dfs[key])
 else:
-    key = st.sidebar.selectbox("Flight Keys: ", [])
+    ey = st.sidebar.selectbox("Flight Keys: ", [])
 
 
 #------------------------------------------------------------
