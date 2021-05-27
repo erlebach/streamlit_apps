@@ -16,8 +16,6 @@ import numpy as np
 from IPython.display import display
 
 
-
-
 def setPandasOptions():
     pd.set_option('display.max_rows', 200)
     pd.set_option('display.max_columns', None)

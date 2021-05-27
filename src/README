@@ -1,0 +1,4 @@
+These files are NOT linked to src/copa off of the Copa base directory. 
+This is dangerous. 
+
+I have not yet decided whether my files should work in both Python and Streamlit without change. If so, I must be able to handle the print statements. Perhaps this is done via command line argument in all my functions. 

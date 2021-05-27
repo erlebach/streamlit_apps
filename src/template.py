@@ -29,7 +29,7 @@ import altair as alt
 
 alt.data_transformers.disable_max_rows()
 
-import src.copa.util_functions as u
+import src.util_functions as u
 
 
 # In[5]:
