@@ -135,13 +135,13 @@ if day != default_day:
 dfs = u.handleCity(which_city, 'all', id_list, fsu, bookings_f, feed, is_print=False, delay=delay)
 
 col1.write(f"dfs:  {dfs}")
-col1.write(f"dfs.keys: {dfs.keys()}")
-col1.write(f"dfs.keys: {list(dfs.keys())}")
+if dfs != None:
+    col1.write(f"dfs.keys: {dfs.keys()}")
+    col1.write(f"dfs.keys: {list(dfs.keys())}")
+    col1.dataframe(dfs[key])
 
 key = st.sidebar.selectbox("Flight Keys: ", list(dfs.keys()))
 
-if key != None:
-    col1.dataframe(dfs[key])
 
 #------------------------------------------------------------
 #------------------------------------------------------------
