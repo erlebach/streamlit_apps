@@ -54,16 +54,16 @@ st.write(fsu.shape, id_list.shape, feeders.shape, bookings_nf.shape, bookings_f.
 #id_list.drop("nb_outbounds", axis=1, inplace=True)
 
 def readFullFeed():
-    feed = pd.read_csv("../data/bookings_ids+pax.csv")
+    feed = pd.read_csv("my_data/bookings_ids+pax.csv")
     st.write(f"feed.shape: {feed.shape}")
     return feed
 
 def createDayFeed(feed, day):
     feed1 = feed[(feed['id_f'].str.contains(day)) | (feed['id_nf'].str.contains(day))]
-    feed1.to_csv("../data/bookings_ids+pax_date.csv.gz", index=0)
+    feed1.to_csv("my_data/bookings_ids+pax_date.csv.gz", index=0)
 
 def readDayFeed():
-    feed = pd.read_csv("../data/bookings_ids+pax_date.csv.gz")
+    feed = pd.read_csv("my_data/bookings_ids+pax_date.csv.gz")
     return feed
 
 #feed = readFullFeed()
