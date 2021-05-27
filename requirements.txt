@@ -1,4 +1,4 @@
 pandas
 matplotlib==3.3.4
 seaborn
-
+networkx
