@@ -1969,16 +1969,11 @@ def findCity(df, city='MIA'):
     return records
 #---------------------------------------------------------
 # streamlit cache
-#@st.cache(suppress_st_warning=True)
 # Error with cache when running in Jupyter-lab. Encountered an unashable object (a function)
+@st.cache(suppress_st_warning=True)
 def handleCity(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print=True, delay=45):
     # Need to increase efficiency
     city_inbounds = findCity(bookings_f, city)
-    #st.write("city_inbounds: ")
-    #st.write(f"City: {city}")
-    #st.write("city_inbounds: ")
-    #st.write(city_inbounds)
-    #st.write(choice_ix, id_list.shape, fsu.shape, bookings_f.shape, feeders.shape)
 
     if choice_ix == 'all':
         min_ix = 0
@@ -1987,30 +1982,22 @@ def handleCity(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print=True
         min_ix = choice_ix
         max_ix = choice_ix+1
 
-    #st.write(f"min_ix: , {min_ix}")
+    dfs = {}
     for which_ix in range(min_ix, max_ix):
 
         try:
             inbound = city_inbounds.iloc[which_ix].id_f
-            #st.write(f"inbound: {inbound}")
-            #st.write(f"fsu.shape: {fsu.shape}")
             print("inbound= ", inbound)
             fsu_inbound  = fsu.set_index('id').loc[inbound]
-            #st.write(f"fsu_inbound: {fsu_inbound}")
         except:
-            st.write("first except")
+            #st.write("first except")
             print("first except")
             continue
 
         try:
             fsu_inbound  = fsu.set_index('id').loc[inbound]
-            #st.write(f"fsu_inbound: ...")
-            #st.write(f"{fsu_inbound}")
-            #print(f"fsu_inbound: ...")
-            #print(f"{fsu_inbound}")
         except:
             # Sometimes the key "inbound" is not found
-            st.write("HandleCity: second exception")
             print("HandleCity: second exception")
             continue
 
@@ -2019,8 +2006,6 @@ def handleCity(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print=True
         # if the delay is negative, the plane arrived early, and the 
         # passengers have time to connect
         if inbound_arr_delay < 0:
-            #st.write("arr_delay < 0")
-            #print("arr_delay < 0")
             #continue # <<< ADD THIS BACK?
             pass
 
@@ -2049,43 +2034,32 @@ def handleCity(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print=True
         fsu_pax.drop_duplicates(inplace=True)
         #print("fsu_pax.shape: ", fsu_pax.shape)
 
-        # <<<<<< FIX THIS ERROR >>>>>>>
-        #st.write(f"fsu_pax.shape:  {fsu_pax.shape}")   ### (0,99) on streamlit, (nonzero, 99) on Jupyter-lab
-
-        #st.write("2")
-
-
-        #print(fsu_pax.columns)
-        #print(fsu_pax[['OD','id']])  # The id is non-feeder
-
         # Compute connection time (inbound.IN - outbound.sch_dep)
-        #display(fsu_pax)
         available = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().IN_DTMZ) / 1e9 / 60
         planned   = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().SCH_ARR_DTMZ) / 1e9 / 60
         delta = planned - available   # = IN - SCH_ARR
         dep_delay = (fsu_pax.OUT_DTMZ - fsu_pax.SCH_DEP_DTMZ) / 1e9 / 60
-        #print('dep_delay= ', dep_delay.shape, delta.shape, planned.shape, available.shape)
+        arr_delay = (fsu_pax.IN_DTMZ  - fsu_pax.SCH_ARR_DTMZ) / 1e9 / 60   # outbound
+        zipped = zip(planned, available, delta, arr_delay, dep_delay, fsu_pax.SCH_DEP_TMZ, fsu_pax.OD, fsu_pax.pax_nf)
+ 
+        columns=['planned','avail','delta','arr_delay','dep_delay','sch_dep_tmz','od','pax']
+        df2 = pd.DataFrame(list(zipped), columns=columns).sort_values(by='od')
+        df2 = df2[df2['avail'] < delay]
 
-        if is_print:
-            #st.write(f"is_print: {is_print}")
-            arr_delay = (fsu_pax.IN_DTMZ  - fsu_pax.SCH_ARR_DTMZ) / 1e9 / 60   # outbound
-            #print("fsu_pax: ", fsu_pax.shape)
+        if df2.shape[0] == 0:
+            df2_isempty = True
+        else:
+            df2_isempty = False
 
-            printed_header = False
-            zipped = zip(planned, available, delta, arr_delay, dep_delay, fsu_pax.SCH_DEP_TMZ, fsu_pax.OD, fsu_pax.pax_nf)
-            df2 = pd.DataFrame(list(zipped), 
-             columns=['planned','avail','delta','arr_delay','dep_delay',
-                      'sch_dep_tmz','od','pax']).sort_values(by='od')
-            df2 = df2[df2['avail'] < delay]
-            if df2.shape[0] == 0:
-                df2_isempty = True
-            else:
-                df2_isempty = False
+        if df2_isempty == False:
+            dfs[which_ix] = df2
 
-            if not printed_header and df2_isempty == False:
-                st.write(df2)
-                display(df2)
-                printed_header = True
+        if is_print and df2_isempty == False:
+            st.write(df2)
+            display(df2)
+            printed_header = True
+
+    return dfs
 
 #---------------------------------------------------------
 #---------------------------------------------------------
