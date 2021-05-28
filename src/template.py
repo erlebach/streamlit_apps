@@ -1,24 +1,16 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[3]:
-
-
 # Use magic commands (%)
 
 import streamlit as st
 
 # When modifying libraries, no need to restart the kernel
 try:
-    st.write("try")
     get_ipython().run_line_magic('load_ext', 'autoreload')
     get_ipython().run_line_magic('autoreload', '2')
 except:
-    st.write("except")
     pass
-
-
-# In[4]:
 
 
 import pandas as pd

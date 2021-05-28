@@ -21,7 +21,7 @@ padding_right = 3
 padding_top = 10
 padding_bottom = 10
 BACKGROUND_COLOR = 'black'
-COLOR = 'green'
+COLOR = 'lightgreen'
 
 st.markdown(
         f"""
@@ -108,7 +108,11 @@ f = feeders[['id_f','id_nf','pax_f','pax_nf']]
 
 cities = fsu[fsu['OD'].str[0:3] != 'PTY'].loc[:,'OD'].str[0:3].unique()
 
-which_city = st.sidebar.selectbox("Select a City: ", cities)
+# find the index for SJO
+# convert to int from np.int64 (not the same)
+init_ix = int(np.where(cities == 'SJO')[0][0])
+
+which_city = st.sidebar.selectbox("Select a City: ", cities, index=init_ix)
 delay = st.sidebar.slider("Delay", 0, 120, 45)
 
 a = [3, 20, 30, 50, 70]
@@ -132,16 +136,30 @@ if day != default_day:
 
 # Works (using feed)
 # Return dictionary
-dfs = u.handleCity(which_city, 'all', id_list, fsu, bookings_f, feed, is_print=False, delay=delay)
+which_handle = st.sidebar.radio("which handleCity?", ['handleCity','handleCityGraph'], index=1)
 
+which_tooltip = col1.radio("Tooltips:", ['Node','Edge','Off'], index=2)
+
+if which_handle == 'handleCity':
+    dfs = u.handleCity(which_city, 'all', id_list, fsu, bookings_f, feed, is_print=True, delay=delay)
+else:
+    #st.write("========== +++++++++++")
+    node_df, edge_df = u.handleCityGraph(which_city, 'all', id_list, fsu, bookings_f, feed, is_print=False, delay=delay)
+
+    st.write(node_df)
+    st.write(edge_df)
+
+""" 
 if dfs != None:
     col1.write(f"dfs.keys: {dfs.keys()}")
     col1.write(f"dfs.keys: {list(dfs.keys())}")
 
     key = st.sidebar.selectbox("Flight Keys: ", list(dfs.keys()))
-    col1.dataframe(dfs[key])
+    if key != None:
+        col1.dataframe(dfs[key])
 else:
-    ey = st.sidebar.selectbox("Flight Keys: ", [])
+    key = st.sidebar.selectbox("Flight Keys: ", [])
+"""
 
 
 #------------------------------------------------------------
@@ -151,6 +169,113 @@ else:
 
 nb_nodes = int(st.sidebar.text_input("Nb Nodes", value=50, max_chars=5))
 nb_edges = int(st.sidebar.text_input("Nb Edges", value=300, max_chars=6))
+
+def drawPlot2(node_df, edge_df, which_tooltip):
+    nb_nodes = node_df.shape[0]
+    nb_edges = edge_df.shape[0]
+
+    # By convensions, the first node is the feeder. 
+    x = []
+    nb_outbounds = nb_nodes - 1
+    x.append(0.5) # centered
+    x.extend(np.linspace(0, 1, nb_outbounds))
+    node_df['x'] = x
+    node_df['y'] = 0.8
+    node_df.loc[1:,'y'] = 0.3  # assumes node_df is ordered correctly (feeder first)
+
+    node_nearest = alt.selection(type='single', nearest=True, on='mouseover',
+                        fields=['x','y'], empty='none')
+
+    edge_nearest = alt.selection(type='single', nearest=True, on='mouseover',
+                        fields=['x_mid','y_mid'], empty='none')
+
+    lookup_data = alt.LookupData(
+        node_df, key="id", fields=["x", "y"]
+    )
+
+    lookup_data = alt.LookupData(
+        node_df, key="id", fields=["x", "y"]
+    )
+
+    nodes = alt.Chart(node_df).mark_circle(size=400, opacity=0.8).encode(
+        x = 'x:Q',
+        y = 'y:Q',
+        color = 'arr_delay',
+        size = 'dep_delay',
+        tooltip=['x','y','arr_delay','dep_delay']
+    )
+
+    edges = alt.Chart(edge_df).mark_rule(stroke='yellow').encode(
+        x = 'x:Q',
+        y = 'y:Q',
+        x2 = 'x2:Q',
+        y2 = 'y2:Q',
+        stroke = 'pax:Q',
+        strokeWidth = 'pax:Q' #'scaled_pax:Q'
+    ).transform_lookup(
+        # extract all flights with 'origin' from airports (state, lat, long)
+        lookup='id_f_y',   # needed to draw the line. 'origin' is in flights_airport.csv
+        from_=lookup_data
+    ).transform_lookup(
+        # extract all flights with 'destination' from airports (state, lat, long) renamed (state, lat2, long2)
+        lookup='id_nf_y',
+        from_=lookup_data,
+        as_=['x2', 'y2']
+    )
+
+    mid_edges = alt.Chart(edge_df).mark_circle(color='yellow', size=400, opacity=0.0).encode(
+        x = 'mid_x:Q',
+        y = 'mid_y:Q',
+        tooltip= ['avail','planned','delta','pax']
+    ).transform_lookup(
+        # extract all flights with 'origin' from airports (state, lat, long)
+        lookup='id_f_y',   # needed to draw the line. 'origin' is in flights_airport.csv
+        from_=lookup_data
+    ).transform_lookup(
+        # extract all flights with 'destination' from airports (state, lat, long) renamed (state, lat2, long2)
+        lookup='id_nf_y',
+        from_=lookup_data,
+        as_=['x2', 'y2']
+    ).transform_calculate(
+        mid_x = '0.5*(datum.x2 + datum.x)',
+        mid_y = '0.5*(datum.y2 + datum.y)'
+    )
+
+    if which_tooltip == 'Edge':
+        col1.write("add edge tip")
+        mid_edges = mid_edges.add_selection(
+            edge_nearest
+        )
+    elif which_tooltip == 'Node':
+        col1.write("add node tip")
+        nodes = nodes.add_selection(
+            node_nearest
+        )
+    elif which_tooltip == 'Off':
+        col1.write("no tooltips")
+
+        
+    full_chart = (edges + nodes + mid_edges)
+    #full_chart = mid_edges
+
+    return full_chart
+
+"""
+if dfs == None or key == None:
+    st.write(f"no graph, dfs or key is None")
+    pass
+else:
+    df = dfs[key].copy()  # do not mutate cached objects
+    chart = drawPlot2(df, which_city)
+    col2.altair_chart(chart, use_container_width=True)
+"""
+
+
+chart2 = drawPlot2(node_df, edge_df, which_tooltip)
+col2.altair_chart(chart2, use_container_width=True)
+st.stop()
+
+
 
 @st.cache
 def createGraph(nb_nodes, nb_edges):

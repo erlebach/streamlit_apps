@@ -1970,10 +1970,14 @@ def findCity(df, city='MIA'):
 #---------------------------------------------------------
 # streamlit cache
 # Error with cache when running in Jupyter-lab. Encountered an unashable object (a function)
-@st.cache(suppress_st_warning=True)
+#@st.cache(suppress_st_warning=True)
 def handleCity(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print=True, delay=45):
     # Need to increase efficiency
+
+    # I need to return two structures: nodes and edges. 
+
     city_inbounds = findCity(bookings_f, city)
+    st.write("enter handleCity")
 
     if choice_ix == 'all':
         min_ix = 0
@@ -1987,8 +1991,9 @@ def handleCity(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print=True
 
         try:
             inbound = city_inbounds.iloc[which_ix].id_f
-            print("inbound= ", inbound)
             fsu_inbound  = fsu.set_index('id').loc[inbound]
+            #st.write("inbound= ", inbound)
+            #st.write("city_inbounds= ", city_inbounds) # from Bookings_f database
         except:
             #st.write("first except")
             print("first except")
@@ -2011,6 +2016,8 @@ def handleCity(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print=True
 
         outbounds = findOutboundIds(id_list, inbound).to_frame()
         outbounds['id_f'] = inbound
+        st.write("outbounds")
+        st.write(outbounds)
 
         #st.write("feeders: ", feeders.shape)  # <<<< THE DIFFERENCE
         #print("feeders: ", feeders.shape)
@@ -2025,24 +2032,32 @@ def handleCity(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print=True
         fsu_outbound = pd.merge(fsu, outbounds, how='inner', left_on='id', right_on='id_nf')
         fsu_outbound['id_f_nf'] = fsu_outbound['id_f'] + fsu_outbound['id_nf']
 
-        #st.write("fsu_outbound: ", fsu_outbound.shape)
-        #st.write("feeders_1: ", feeders_1.shape)
-        #print("fsu_outbound: ", fsu_outbound.shape)
-        #print("feeders_1: ", feeders_1.shape)
+        st.write("fsu_outbound: ", fsu_outbound.shape)
+        st.write("feeders_1: ", feeders_1.shape)
+        fsu_outbound.to_csv("outbound_city.csv", index=0)
+        feeders_1.to_csv("feeders_1_city.csv", index=0)
 
-        fsu_pax      = pd.merge(fsu_outbound, feeders_1, how='inner', left_on='id_f_nf', right_on='id_f_nf')
+        fsu_pax = pd.merge(fsu_outbound, feeders_1, how='inner', left_on='id_f_nf', right_on='id_f_nf')
+        st.write("fsu_pax.shape: ", fsu_pax.shape)
+        st.write("fsu_outbound.head: ", fsu_outbound.head())
+        st.write("feeders_1.head: ", feeders_1.head())
         fsu_pax.drop_duplicates(inplace=True)
-        #print("fsu_pax.shape: ", fsu_pax.shape)
+        #st.write(type(fsu_pax))
 
         # Compute connection time (inbound.IN - outbound.sch_dep)
+        id_f = fsu_pax.id_f_x
+        id_nf = fsu_pax.id_nf_x
         available = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().IN_DTMZ) / 1e9 / 60
         planned   = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().SCH_ARR_DTMZ) / 1e9 / 60
         delta = planned - available   # = IN - SCH_ARR
         dep_delay = (fsu_pax.OUT_DTMZ - fsu_pax.SCH_DEP_DTMZ) / 1e9 / 60
         arr_delay = (fsu_pax.IN_DTMZ  - fsu_pax.SCH_ARR_DTMZ) / 1e9 / 60   # outbound
-        zipped = zip(planned, available, delta, arr_delay, dep_delay, fsu_pax.SCH_DEP_TMZ, fsu_pax.OD, fsu_pax.pax_nf)
+        zipped = zip(id_nf, planned, available, delta, arr_delay, dep_delay, fsu_pax.SCH_DEP_TMZ, fsu_pax.OD, fsu_pax.pax_nf)
+
+        #st.write("id_nf")
+        #st.write(id_nf)
  
-        columns=['planned','avail','delta','arr_delay','dep_delay','sch_dep_tmz','od','pax']
+        columns=['id','planned','avail','delta','arr_delay','dep_delay','sch_dep_tmz','od','pax']
         df2 = pd.DataFrame(list(zipped), columns=columns).sort_values(by='od')
         df2 = df2[df2['avail'] < delay]
 
@@ -2056,11 +2071,215 @@ def handleCity(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print=True
 
         if is_print and df2_isempty == False:
             st.write(df2)
-            display(df2)
+            #display(df2)
             printed_header = True
 
     return dfs
 
+#---------------------------------------------------------
+def handleCityGraph(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print=True, delay=45):
+    # Need to increase efficiency
+
+    #st.write("????????????????")
+    #st.write("Enter handleCityGraph")
+    #st.write("fsu.SCH_DEP_DTMZ", fsu.SCH_DEP_DTMZ)
+    #st.write("xxxxx")
+
+    # I need to return two structures: nodes and edges. 
+    # This pair of structures should be returned for each flight I am working with. 
+    # Nodes are single IDs with arr and dep times, arr and dep delays. 
+    # Edges are double IDs with PAX, rotation, and connection times. 
+
+    #st.write("Enter handleCityGraph")
+
+    # Find all inbound flights from a given city (other than PTY)
+    city_inbounds = findCity(bookings_f, city)
+
+    if choice_ix == 'all':
+        min_ix = 0
+        max_ix = city_inbounds.shape[0]
+    else:
+        min_ix = choice_ix
+        max_ix = choice_ix+1
+
+    # For each inbound flight, compute the corresponding outbound flights
+    dfs = {}
+    for which_ix in range(min_ix, max_ix):
+        nodes = []
+
+        try:
+            inbound = city_inbounds.iloc[which_ix].id_f
+            nodes.append(inbound)
+            #st.write("inbound= ", inbound)
+            #st.write("city_inbounds= ", city_inbounds) # from Bookings_f database
+            # keep: id_f only ==> a node
+            fsu_inbound = fsu.set_index('id').loc[inbound]
+        except:
+            #st.write("first except")
+            #print("first except")
+            continue
+
+        inbound_arr_delay = fsu_inbound.ARR_DELAY_MINUTES
+        
+        # if the delay is negative, the plane arrived early, and the 
+        # passengers have time to connect
+        if inbound_arr_delay < 0:
+            #continue # <<< ADD THIS BACK?
+            pass
+
+        # just a collection of 'id_nf' ==> nodes
+        outbounds = findOutboundIds(id_list, inbound).to_frame()
+        outbounds['id_f'] = inbound
+        #st.write("outbounds")
+        #st.write(outbounds)
+        nodes.extend(outbounds['id_nf'].tolist())  # This is the list of nodes
+        #st.write("nodes")
+        #st.write(nodes)
+
+        edges = outbounds['id_nf'].to_frame('e2')  # e2 is id_nf
+        edges['e1'] = inbound   # e1 is id_f
+        edges['id'] = edges['e1'] + '_' + edges['e2']
+        #st.write("edges")
+        #st.write(edges)
+
+        # What is left to do is add the metadata to these lists
+        # Nodes: the data comes from FSU files 
+        # Edges: the data comes from PAX files
+
+
+        #st.write("feeders: ", feeders.shape)  # <<<< THE DIFFERENCE
+        #print("feeders: ", feeders.shape)
+
+        # Create a unique id that combines inbound (feeder) and outbound flights
+        # This will allow me to merge two files with feeder/non-feeder columns
+        feeders_1 = feeders[feeders['id_f'] == inbound]
+        feeders_1['id_f_nf'] = feeders_1['id_f'] + '_' + feeders_1['id_nf']
+
+        # extract these outgoings from the FSU database
+        # if outbounds has ids not in fsu, this approach will not work
+        fsu_outbound = pd.merge(fsu, outbounds, how='inner', left_on='id', right_on='id_nf')
+        fsu_outbound['id_f_nf'] = fsu_outbound['id_f'] + '_' + fsu_outbound['id_nf']
+
+        #st.write("fsu_outbound: ", fsu_outbound.shape)
+        #st.write("feeders_1: ", feeders_1.shape)
+
+        fsu_pax = pd.merge(fsu_outbound, feeders_1, how='inner', left_on='id_f_nf', right_on='id_f_nf')
+        #st.write("fsu_pax.shape: ", fsu_pax.shape)
+        #st.write("fsu_outbound.head: ", fsu_outbound.head())
+        #st.write("feeders_1.head: ", feeders_1.head())
+        #fsu_outbound.to_csv("outbound_cityGraph.csv", index=0)
+        #feeders_1.to_csv("feeders_1_cityGraph.csv", index=0)
+        fsu_pax.drop_duplicates(inplace=True)
+        #st.write(fsu_pax)
+
+        # Compute connection time (inbound.IN - outbound.sch_dep)
+        id_f = fsu_pax.id_f_x
+        id_nf = fsu_pax.id_nf_x
+        # Node metadata
+        #st.write(fsu_pax.columns)
+        dep_delay = (fsu_pax.OUT_DTMZ - fsu_pax.SCH_DEP_DTMZ) / 1e9 / 60
+        arr_delay = (fsu_pax.IN_DTMZ  - fsu_pax.SCH_ARR_DTMZ) / 1e9 / 60   # outbound
+        node_nf_dict = {'id':id_nf, 'arr_delay':arr_delay, 'dep_delay':dep_delay}
+        d_nf = pd.DataFrame(node_nf_dict)
+
+        # Add feeder row
+        # Find inbound in FSU data
+        #ci = fsu_inbound
+        #st.write("ci")
+        #st.write(ci)
+        # fsu_inbound is a Series. Another way to access : fsu_inbound.loc['SCH_DEP_DTMZ',0]
+        dep_delay = (fsu_inbound.OUT_DTMZ - fsu_inbound.transpose().SCH_DEP_DTMZ) / 1e9 / 60
+        arr_delay = (fsu_inbound.IN_DTMZ  - fsu_inbound.transpose().SCH_ARR_DTMZ) / 1e9 / 60   # outbound
+        row_f = {'id':inbound, 'arr_delay':arr_delay, 'dep_delay':dep_delay}
+        d_nf.loc[-1] = row_f
+        # drop=True: do not keep the new index column created by default
+        node_df = d_nf.sort_index().reset_index(drop=True)
+
+        # The first node is the feeder
+        # All the other nodes are the outbounds
+        #st.write('node_df')   # <<<<<<<<<<<,
+        #st.write(node_df)
+
+        # Create Graph edges and metadata
+        id_f_nf = id_f + "_" + id_nf
+        #st.write("fsu_outbound", fsu_outbound.columns)
+        #st.write("fsu_outbound", fsu_outbound.shape)
+        #st.write("fsu_pax", fsu_pax.shape)
+        #st.write("fsu_inbound", type(fsu_inbound))
+        available = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().IN_DTMZ) / 1e9 / 60
+        planned = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().SCH_ARR_DTMZ) / 1e9 / 60
+        pax_id_nf = fsu_pax.id_nf_y
+        pax_id_f  = fsu_pax.id_f_y
+        pax_avail = (fsu_pax.SCH_DEP_DTMZ - fsu_inbound.transpose().IN_DTMZ) / 1e9 / 60
+        pax_planned = (fsu_pax.SCH_DEP_DTMZ - fsu_inbound.transpose().SCH_ARR_DTMZ) / 1e9 / 60
+        dfx = pd.DataFrame([pax_id_f, pax_id_nf, pax_avail, pax_planned]).transpose()
+        #st.write("dfx", dfx)
+        #st.write("available", available)
+        #st.write("pax_avail", pax_avail)
+
+        fsux = fsu[fsu['id'] == '2019/10/01SJOPTY10:29459']
+        fsuy = fsu[fsu['id'] == '2019/10/01PTYTPA14:12393']
+        #st.write("fsux: ", fsux[['id','SCH_DEP_TMZ']])
+        #st.write("fsuy: ", fsuy[['id','SCH_ARR_TMZ']])
+
+
+        #st.write("fsu_pax.columns: ", fsu_pax.columns)
+
+        delta = planned - available   # = IN - SCH_ARR
+        edge_nf_zip = zip(available, planned, delta)
+        id_f = fsu_pax['id_f_y']
+        id_nf = fsu_pax['id_nf_y']
+        id_f_nf = fsu_pax['id_f_nf']
+        #st.write("id_f: ", id_f)
+        #st.write("id_nf: ", id_nf)
+        edge_df = pd.DataFrame()
+        #st.write("concat")
+        edge_df = pd.concat([edge_df, id_f_nf, id_f, id_nf], axis=1)
+        #edge_df['id_f'] = id_f
+        #edge_df['id_f_nf'] = id_f_nf
+        ## Reorder the columns for clarity
+        #edge_df = edge_df.loc[:, ['id_f_nf', 'id_f', 'id_nf']]
+        edge_df['avail'] = available
+        edge_df['planned'] = planned
+        edge_df['delta'] = delta
+        edge_df['pax'] = fsu_pax.pax_nf
+        #edge_nf_dict = {'id_f':id_f, 'id_nf':id_nf} #'avail':available, 'planned':planned, 'delta':delta}
+        #st.write("gordon")
+        #st.write("edge_df")
+        #st.write(edge_df)
+        #st.write(fsu_pax[['id','pax_nf']])
+
+        ## EDGE correct. Now add metadata: avail, planned, delta
+ 
+        columns=['id','planned','avail','delta','arr_delay','dep_delay','sch_dep_tmz','od','pax']
+
+        # Only the first ix
+        return node_df, edge_df
+
+        continue
+
+        df2 = pd.DataFrame(list(zipped), columns=columns).sort_values(by='od')
+        df2 = df2[df2['avail'] < delay]
+
+        if df2.shape[0] == 0:
+            df2_isempty = True
+        else:
+            df2_isempty = False
+
+        if df2_isempty == False:
+            dfs[which_ix] = df2
+
+        if is_print and df2_isempty == False:
+            st.write(df2)
+            #display(df2)
+            printed_header = True
+
+    return dfs
+
+#---------------------------------------------------------
+#---------------------------------------------------------
+#---------------------------------------------------------
+#---------------------------------------------------------
 #---------------------------------------------------------
 #---------------------------------------------------------
 #---------------------------------------------------------
