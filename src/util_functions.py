@@ -2179,7 +2179,8 @@ def handleCityGraph(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print
         #st.write(fsu_pax.columns)
         dep_delay = (fsu_pax.OUT_DTMZ - fsu_pax.SCH_DEP_DTMZ) / 1e9 / 60
         arr_delay = (fsu_pax.IN_DTMZ  - fsu_pax.SCH_ARR_DTMZ) / 1e9 / 60   # outbound
-        node_nf_dict = {'id':id_nf, 'arr_delay':arr_delay, 'dep_delay':dep_delay}
+        od = fsu_pax.OD
+        node_nf_dict = {'id':id_nf, 'arr_delay':arr_delay, 'dep_delay':dep_delay, 'od':od}
         d_nf = pd.DataFrame(node_nf_dict)
 
         # Add feeder row
@@ -2190,7 +2191,8 @@ def handleCityGraph(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print
         # fsu_inbound is a Series. Another way to access : fsu_inbound.loc['SCH_DEP_DTMZ',0]
         dep_delay = (fsu_inbound.OUT_DTMZ - fsu_inbound.transpose().SCH_DEP_DTMZ) / 1e9 / 60
         arr_delay = (fsu_inbound.IN_DTMZ  - fsu_inbound.transpose().SCH_ARR_DTMZ) / 1e9 / 60   # outbound
-        row_f = {'id':inbound, 'arr_delay':arr_delay, 'dep_delay':dep_delay}
+        od = fsu_inbound.OD
+        row_f = {'id':inbound, 'arr_delay':arr_delay, 'dep_delay':dep_delay, 'od':od}
         d_nf.loc[-1] = row_f
         # drop=True: do not keep the new index column created by default
         node_df = d_nf.sort_index().reset_index(drop=True)

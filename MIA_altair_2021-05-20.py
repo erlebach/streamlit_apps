@@ -170,6 +170,11 @@ else:
 nb_nodes = int(st.sidebar.text_input("Nb Nodes", value=50, max_chars=5))
 nb_edges = int(st.sidebar.text_input("Nb Edges", value=300, max_chars=6))
 
+# Allow tooltip to work in full screen mode (expanded view)
+# From: https://discuss.streamlit.io/t/tool-tips-in-fullscreen-mode-for-charts/6800/9
+st.markdown('<style>#vg-tooltip-element{z-index: 1000051}</style>',
+             unsafe_allow_html=True)
+
 def drawPlot2(node_df, edge_df, which_tooltip):
     nb_nodes = node_df.shape[0]
     nb_edges = edge_df.shape[0]
@@ -197,12 +202,39 @@ def drawPlot2(node_df, edge_df, which_tooltip):
         node_df, key="id", fields=["x", "y"]
     )
 
-    nodes = alt.Chart(node_df).mark_circle(size=400, opacity=0.8).encode(
+    nodes = alt.Chart(node_df).mark_rect(
+        size=100,
+        width=40,
+        height=15,
+        opacity=0.8,
+        align = 'center',
+    ).encode(
         x = 'x:Q',
         y = 'y:Q',
         color = 'arr_delay',
-        size = 'dep_delay',
-        tooltip=['x','y','arr_delay','dep_delay']
+        #size  = 'dep_delay',
+        #tooltip=['arr_delay','dep_delay','od']
+    )
+
+    node_tooltips = alt.Chart(node_df).mark_circle(
+        size=500,
+        opacity=0.0,
+    ).encode(
+        x = 'x:Q',
+        y = 'y:Q',
+        tooltip=['arr_delay','dep_delay','od']
+    )
+
+    node_text = alt.Chart(node_df).mark_text(
+        opacity = 1.,
+        color = 'black',
+        align='center',
+        baseline='middle'
+    ).encode(
+        x = 'x:Q',
+        y = 'y:Q',
+        text='od',
+        size=alt.value(8)
     )
 
     edges = alt.Chart(edge_df).mark_rule(stroke='yellow').encode(
@@ -223,7 +255,7 @@ def drawPlot2(node_df, edge_df, which_tooltip):
         as_=['x2', 'y2']
     )
 
-    mid_edges = alt.Chart(edge_df).mark_circle(color='yellow', size=400, opacity=0.0).encode(
+    mid_edges = alt.Chart(edge_df).mark_circle(color='yellow', size=100, opacity=0.1).encode(
         x = 'mid_x:Q',
         y = 'mid_y:Q',
         tooltip= ['avail','planned','delta','pax']
@@ -248,14 +280,14 @@ def drawPlot2(node_df, edge_df, which_tooltip):
         )
     elif which_tooltip == 'Node':
         col1.write("add node tip")
-        nodes = nodes.add_selection(
+        node_tooltips = node_tooltips.add_selection(
             node_nearest
         )
     elif which_tooltip == 'Off':
         col1.write("no tooltips")
 
         
-    full_chart = (edges + nodes + mid_edges)
+    full_chart = (edges + nodes + node_text + node_tooltips + mid_edges)
     #full_chart = mid_edges
 
     return full_chart
