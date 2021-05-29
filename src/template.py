@@ -21,6 +21,10 @@ import altair as alt
 
 alt.data_transformers.disable_max_rows()
 
+import sys
+st.write("inside template")
+st.write(sys.path)
+
 import src.util_functions as u
 
 
