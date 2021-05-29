@@ -11,11 +11,10 @@ import streamlit as st
 import sys
 sys.path[2] = "."
 
-"""
 ## BUGs to fix
 
-- When choosing the city LIM, the graph does not show properly. DO NOT KNOW WHY. 
-"""
+# When choosing the city LIM, the graph does not show properly. DO NOT KNOW WHY. 
+# Somehow fixed. 
 
 from src.template import *
 
@@ -67,9 +66,9 @@ feeders = pd.read_csv("my_data/bookings_idlist_pax_date.csv.gz")
 fsu = pd.read_csv("my_data/node_attributes_df.csv.gz")
 id_list = pd.read_csv("my_data/id_list_date.csv.gz")
 
-col1.write("---")
+#col1.write("---")
 # control color via CSS
-col1.write(f"{fsu.shape}, {id_list.shape}, {feeders.shape}, {bookings_nf.shape}, {bookings_f.shape}")
+#col1.write(f"{fsu.shape}, {id_list.shape}, {feeders.shape}, {bookings_nf.shape}, {bookings_f.shape}")
 #st.write(f"{fsu.shape}, {id_list.shape}, {feeders.shape}, {bookings_nf.shape}, {bookings_f.shape}")
 #st.sidebar.write(f"{fsu.shape}, {id_list.shape}, {feeders.shape}, {bookings_nf.shape}, {bookings_f.shape}")
 #st.write(fsu.shape, id_list.shape, feeders.shape, bookings_nf.shape, bookings_f.shape)
@@ -96,7 +95,7 @@ def readDayFeed():
 
 day = '2019/10/01'
 feed = readDayFeed()
-col1.write(f"feed.shape: {feed.shape}")
+#col1.write(f"feed.shape: {feed.shape}")
 
 
 #feeders[feeders['id_nf'] == '2019/10/01PTYADZ14:46610']['pax_f'].sum()
@@ -119,14 +118,14 @@ cities = fsu[fsu['OD'].str[0:3] != 'PTY'].loc[:,'OD'].str[0:3].unique()
 init_ix = int(np.where(cities == 'SJO')[0][0])
 
 which_city = st.sidebar.selectbox("Select a City: ", cities, index=init_ix)
-delay = st.sidebar.slider("Delay", 0, 120, 45)
+delay = st.sidebar.slider("Keep Connection times greater than (min)", 0, 120, 45)
 
 a = [3, 20, 30, 50, 70]
 b = [10, 20, 30, 70, 20]
 
 df = pd.DataFrame({'x':a, 'y':b})
 
-color = st.sidebar.selectbox("Node color: ", ['red','green','orange', 'blue'])
+#color = st.sidebar.selectbox("Node color: ", ['red','green','orange', 'blue'])
 #color = col1.selectbox("Node color: ", ['red','green','orange', 'blue'])
 size = st.sidebar.slider("Node size: ", 30, 400, 100)
 #size = col1.slider("Node size: ", 30, 400, 100)
@@ -143,37 +142,43 @@ if day != default_day:
 # Works (using feed)
 # Return dictionary
 which_handle = st.sidebar.radio("which handleCity?", ['handleCity','handleCityGraph'], index=1)
+keep_early_arr = col1.checkbox("Keep early arrivals", value=False) 
 
 which_tooltip = col1.radio("Tooltips:", ['Node','Edge','Off'], index=2)
 
 if which_handle == 'handleCity':
-    dfs = u.handleCity(which_city, 'all', id_list, fsu, bookings_f, feed, is_print=True, delay=delay)
+    dfs = u.handleCity(
+            which_city, 
+            'all', 
+            id_list, 
+            fsu, 
+            bookings_f, 
+            feed, 
+            is_print=True, 
+            delay=delay
+    )
 else:
-    #st.write("========== +++++++++++")
-    node_df, edge_df = u.handleCityGraph(which_city, 'all', id_list, fsu, bookings_f, feed, is_print=False, delay=delay)
+    node_df, edge_df = u.handleCityGraph(
+            keep_early_arr, 
+            which_city, 
+            'all', 
+            id_list, 
+            fsu, 
+            bookings_f, 
+            feed, 
+            is_print=False, 
+            delay=delay
+    )
 
-    st.write(node_df)
-    st.write(edge_df)
-
-""" 
-if dfs != None:
-    col1.write(f"dfs.keys: {dfs.keys()}")
-    col1.write(f"dfs.keys: {list(dfs.keys())}")
-
-    key = st.sidebar.selectbox("Flight Keys: ", list(dfs.keys()))
-    if key != None:
-        col1.dataframe(dfs[key])
-else:
-    key = st.sidebar.selectbox("Flight Keys: ", [])
-"""
-
+    #st.write(node_df)
+    #st.write(edge_df)
 
 #------------------------------------------------------------
 
 # Create Altair Chart
 
-nb_nodes = int(st.sidebar.text_input("Nb Nodes", value=50, max_chars=5))
-nb_edges = int(st.sidebar.text_input("Nb Edges", value=300, max_chars=6))
+#nb_nodes = int(st.sidebar.text_input("Nb Nodes", value=50, max_chars=5))
+#nb_edges = int(st.sidebar.text_input("Nb Edges", value=300, max_chars=6))
 
 # Allow tooltip to work in full screen mode (expanded view)
 # From: https://discuss.streamlit.io/t/tool-tips-in-fullscreen-mode-for-charts/6800/9
@@ -282,17 +287,18 @@ def drawPlot2(node_df, edge_df, which_tooltip):
     )
 
     if which_tooltip == 'Edge':
-        col1.write("add edge tip")
+        #col1.write("add edge tip")
         mid_edges = mid_edges.add_selection(
             edge_nearest
         )
     elif which_tooltip == 'Node':
-        col1.write("add node tip")
+        #col1.write("add node tip")
         node_tooltips = node_tooltips.add_selection(
             node_nearest
         )
     elif which_tooltip == 'Off':
-        col1.write("no tooltips")
+        #col1.write("no tooltips")
+        pass
 
         
     full_chart = (edges + nodes + node_text + node_tooltips + mid_edges)
@@ -319,18 +325,20 @@ def drawPlot3(node_df, edge_df, which_tooltip):
     # For each edge, create a set of nodes, stored in a special dataframe
     # For now, use loops since there are not many edges
 
+    #st.write("node_df ", node_df)
+    #st.write("edge_df ", edge_df)
     #st.write(edge_df.columns)
+
     e1 = edge_df['id_f_y']
     e2 = edge_df['id_nf_y']
-    #st.write(e1.tolist())
-    #st.write(node_df.columns)
+
     # x,y of node 1 and 2 of each edge.
     # Construct intermediate points (ids1a and ids1b)
     ids1 = node_df.set_index('id').loc[e1.tolist()].reset_index()[['x','y']]
     ids2 = node_df.set_index('id').loc[e2.tolist()].reset_index()[['x','y']]
     ids1a = pd.DataFrame([ids1.x, 0.5*(ids1.y+ids2.y)]).transpose()
     ids1b = pd.DataFrame([ids2.x, 0.5*(ids1.y+ids2.y)]).transpose()
-    #st.write(ids1.shape,ids2.shape,ids1a.shape,ids1b.shape)
+ 
     df_step = pd.concat([ids1, ids1a, ids1b, ids2], axis=1)
     df_step.columns = ['x1','y1','x2','y2','x3','y3','x4','y4']
 
@@ -339,7 +347,6 @@ def drawPlot3(node_df, edge_df, which_tooltip):
     #  col 2: [y1,y2,y3,y4].row1
     #  col 3: [x1,x2,x3,x4].row2
     #  col 4: [y1,y2,y3,y4].row2
-    #st.write(df_step)
     df_step_x = df_step[['x1','x2','x3','x4']].transpose()
     df_step_y = df_step[['y1','y2','y3','y4']].transpose()
 
@@ -352,38 +359,29 @@ def drawPlot3(node_df, edge_df, which_tooltip):
     df_step_y = df_step_y.reset_index(drop=True)
 
     df_step = pd.concat([df_step_x, df_step_y], axis=1)
-    #st.write("df_step_x", df_step_x)
-    #st.write("df_step", df_step)
 
 
     # Create a dataframe
 
     df_step = df_step.reset_index()  # generates an index column
-    #st.write("df_step.x0= ", df_step['x0'])
-    #st.write("df_step.y0= ", df_step['y0'])
+
 
     # Technique found at https://github.com/altair-viz/altair/issues/1036
     base = alt.Chart(df_step)
     # Points are out of order. WHY? 
     layers = alt.layer(
         *[  base.mark_line(
-            color='orange',
+            color='red',
+            opacity=1.0,
             strokeWidth=2
            ).encode(
-               x='x'+str(i), 
-               y='y'+str(i), 
+               #x='x'+str(i), 
+               x=alt.X('x'+str(i), axis=alt.Axis(title="Outbounds")), 
+               y=alt.Y('y'+str(i), axis=alt.Axis(title="", labels=False)),
                order='index'
            ) for i in range(int(df_step.shape[1]/2))
         ], data=df_step)
 
-
-        #for i in range(df_step.shape[1]):
-        #base.mark_line(color='orange',strokeWidth=5, interpolate='step').encode(x='x0:Q', y='y0:Q'),
-        #base.mark_line(color='white').encode(x='x1', y='y1', order='index'),
-        #base.mark_line(color='white').encode(x='x2', y='y2', order='index')
-        #base.mark_line(interpolate='step').encode(x='x0', y='y0'),
-        #base.mark_line(interpolate='step').encode(x='x1', y='y1')
-    #)
 
     # Set up tooltips searching via mouse movement
     node_nearest = alt.selection(type='single', nearest=True, on='mouseover',
@@ -403,14 +401,12 @@ def drawPlot3(node_df, edge_df, which_tooltip):
     nodes = alt.Chart(node_df).mark_rect(
         width=50,
         height=20,
-        opacity=0.8,
+        opacity=1.0,
         align = 'center',
     ).encode(
-        x = 'x:Q',
+        x = alt.X('x:Q'),
         y = 'y:Q',
         color = 'arr_delay',
-        #size  = 'dep_delay',
-        #tooltip=['arr_delay','dep_delay','od']
     )
 
     node_tooltips = alt.Chart(node_df).mark_circle(
@@ -457,12 +453,6 @@ def drawPlot3(node_df, edge_df, which_tooltip):
         as_=['x2', 'y2']
     )
 
-    #edges_plus = alt.Chrt(edge_df).mark_line(
-        #stroke='orange',
-        #interpolate='step'
-    #).encode(
-    #)
-
     mid_edges = alt.Chart(edge_df).mark_circle(color='yellow', size=100, opacity=0.1).encode(
         x = 'mid_x:Q',
         y = 'mid_y:Q',
@@ -482,39 +472,47 @@ def drawPlot3(node_df, edge_df, which_tooltip):
     )
 
     if which_tooltip == 'Edge':
-        col1.write("add edge tip")
+        #col1.write("add edge tip")
         mid_edges = mid_edges.add_selection(
             edge_nearest
         )
     elif which_tooltip == 'Node':
-        col1.write("add node tip")
+        #col1.write("add node tip")
         node_tooltips = node_tooltips.add_selection(
             node_nearest
         )
     elif which_tooltip == 'Off':
-        col1.write("no tooltips")
+        #col1.write("no tooltips")
+        pass
 
-        
     full_chart = (layers + edges + nodes + node_text + node_tooltips + mid_edges)
-    #full_chart = mid_edges
+
+    # Chart Configuration
+    full_chart = full_chart.configure_axisX(
+        labels=False,
+    )
 
     return full_chart
 
 
-"""
-if dfs == None or key == None:
-    st.write(f"no graph, dfs or key is None")
-    pass
-else:
-    df = dfs[key].copy()  # do not mutate cached objects
-    chart = drawPlot2(df, which_city)
-    col2.altair_chart(chart, use_container_width=True)
-"""
+#"""
+#if dfs == None or key == None:
+    #st.write(f"no graph, dfs or key is None")
+#    pass
+#else:
+    #df = dfs[key].copy()  # do not mutate cached objects
+    #chart = drawPlot2(df, which_city)
+    #col2.altair_chart(chart, use_container_width=True)
+#"""
 
 
 # Experimental. Use drawPlot2 for stable results
-chart2 = drawPlot3(node_df, edge_df, which_tooltip)
-col2.altair_chart(chart2, use_container_width=True)
+if edge_df.shape[0] == 0:
+    col2.write("Nothing to display: all passengers have sufficient connection time")
+else:
+    chart2 = drawPlot3(node_df, edge_df, which_tooltip)
+    col2.altair_chart(chart2, use_container_width=True)
+
 st.stop()
 
 

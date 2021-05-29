@@ -12,7 +12,6 @@ try:
 except:
     pass
 
-
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -22,8 +21,8 @@ import altair as alt
 alt.data_transformers.disable_max_rows()
 
 import sys
-st.write("inside template")
-st.write(sys.path)
+#st.write("inside template, sys.path")
+#st.write(sys.path)
 
 import src.util_functions as u
 
