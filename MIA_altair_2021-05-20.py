@@ -11,6 +11,12 @@ import streamlit as st
 import sys
 sys.path[2] = "."
 
+"""
+## BUGs to fix
+
+- When choosing the city LIM, the graph does not show properly. DO NOT KNOW WHY. 
+"""
+
 from src.template import *
 
 import altair as alt
@@ -163,7 +169,6 @@ else:
 
 
 #------------------------------------------------------------
-#------------------------------------------------------------
 
 # Create Altair Chart
 
@@ -237,9 +242,12 @@ def drawPlot2(node_df, edge_df, which_tooltip):
         size=alt.value(8)
     )
 
-    edges = alt.Chart(edge_df).mark_rule(stroke='yellow').encode(
-        x = 'x:Q',
-        y = 'y:Q',
+    edges = alt.Chart(edge_df).mark_rule(
+        stroke='yellow',
+        interpolate='step-before'
+    ).encode(
+        x  = 'x:Q',
+        y  = 'y:Q',
         x2 = 'x2:Q',
         y2 = 'y2:Q',
         stroke = 'pax:Q',
@@ -292,6 +300,207 @@ def drawPlot2(node_df, edge_df, which_tooltip):
 
     return full_chart
 
+#--------------------------------------------------
+
+def drawPlot3(node_df, edge_df, which_tooltip):
+    nb_nodes = node_df.shape[0]
+    nb_edges = edge_df.shape[0]
+
+    # By convention, the first node is the feeder. 
+    x = []
+    nb_outbounds = nb_nodes - 1
+    x.append(0.5) # centered
+    x.extend(np.linspace(0, 1, nb_outbounds))
+    node_df['x'] = x
+    node_df['y'] = 0.8
+    node_df.loc[1:,'y'] = 0.3  # assumes node_df is ordered correctly (feeder first)
+
+    # Set up step lines
+    # For each edge, create a set of nodes, stored in a special dataframe
+    # For now, use loops since there are not many edges
+
+    #st.write(edge_df.columns)
+    e1 = edge_df['id_f_y']
+    e2 = edge_df['id_nf_y']
+    #st.write(e1.tolist())
+    #st.write(node_df.columns)
+    # x,y of node 1 and 2 of each edge.
+    # Construct intermediate points (ids1a and ids1b)
+    ids1 = node_df.set_index('id').loc[e1.tolist()].reset_index()[['x','y']]
+    ids2 = node_df.set_index('id').loc[e2.tolist()].reset_index()[['x','y']]
+    ids1a = pd.DataFrame([ids1.x, 0.5*(ids1.y+ids2.y)]).transpose()
+    ids1b = pd.DataFrame([ids2.x, 0.5*(ids1.y+ids2.y)]).transpose()
+    #st.write(ids1.shape,ids2.shape,ids1a.shape,ids1b.shape)
+    df_step = pd.concat([ids1, ids1a, ids1b, ids2], axis=1)
+    df_step.columns = ['x1','y1','x2','y2','x3','y3','x4','y4']
+
+    # Now create one line per edge: 
+    #  col 1: [x1,x2,x3,x4].row1
+    #  col 2: [y1,y2,y3,y4].row1
+    #  col 3: [x1,x2,x3,x4].row2
+    #  col 4: [y1,y2,y3,y4].row2
+    #st.write(df_step)
+    df_step_x = df_step[['x1','x2','x3','x4']].transpose()
+    df_step_y = df_step[['y1','y2','y3','y4']].transpose()
+
+    # relabel the columns of df_step_x as 'x0', 'x1', ..., 'x15'
+    # relabel the columns of df_step_y as 'y0', 'y1', ..., 'y15'
+    df_step_x.columns = ['x'+str(i) for i in range(df_step_x.shape[1])]
+    df_step_y.columns = ['y'+str(i) for i in range(df_step_y.shape[1])]
+
+    df_step_x = df_step_x.reset_index(drop=True)
+    df_step_y = df_step_y.reset_index(drop=True)
+
+    df_step = pd.concat([df_step_x, df_step_y], axis=1)
+    #st.write("df_step_x", df_step_x)
+    #st.write("df_step", df_step)
+
+
+    # Create a dataframe
+
+    df_step = df_step.reset_index()  # generates an index column
+    #st.write("df_step.x0= ", df_step['x0'])
+    #st.write("df_step.y0= ", df_step['y0'])
+
+    # Technique found at https://github.com/altair-viz/altair/issues/1036
+    base = alt.Chart(df_step)
+    # Points are out of order. WHY? 
+    layers = alt.layer(
+        *[  base.mark_line(
+            color='orange',
+            strokeWidth=2
+           ).encode(
+               x='x'+str(i), 
+               y='y'+str(i), 
+               order='index'
+           ) for i in range(int(df_step.shape[1]/2))
+        ], data=df_step)
+
+
+        #for i in range(df_step.shape[1]):
+        #base.mark_line(color='orange',strokeWidth=5, interpolate='step').encode(x='x0:Q', y='y0:Q'),
+        #base.mark_line(color='white').encode(x='x1', y='y1', order='index'),
+        #base.mark_line(color='white').encode(x='x2', y='y2', order='index')
+        #base.mark_line(interpolate='step').encode(x='x0', y='y0'),
+        #base.mark_line(interpolate='step').encode(x='x1', y='y1')
+    #)
+
+    # Set up tooltips searching via mouse movement
+    node_nearest = alt.selection(type='single', nearest=True, on='mouseover',
+                        fields=['x','y'], empty='none')
+
+    edge_nearest = alt.selection(type='single', nearest=True, on='mouseover',
+                        fields=['x_mid','y_mid'], empty='none')
+
+    lookup_data = alt.LookupData(
+        node_df, key="id", fields=["x", "y"]
+    )
+
+    lookup_data = alt.LookupData(
+        node_df, key="id", fields=["x", "y"]
+    )
+
+    nodes = alt.Chart(node_df).mark_rect(
+        width=50,
+        height=20,
+        opacity=0.8,
+        align = 'center',
+    ).encode(
+        x = 'x:Q',
+        y = 'y:Q',
+        color = 'arr_delay',
+        #size  = 'dep_delay',
+        #tooltip=['arr_delay','dep_delay','od']
+    )
+
+    node_tooltips = alt.Chart(node_df).mark_circle(
+        size=500,
+        opacity=0.0,
+    ).encode(
+        x = 'x:Q',
+        y = 'y:Q',
+        tooltip=['arr_delay','dep_delay','od']
+    )
+
+    node_text = alt.Chart(node_df).mark_text(
+        opacity = 1.,
+        color = 'black',
+        align='center',
+        baseline='middle'
+    ).encode(
+        x = 'x:Q',
+        y = 'y:Q',
+        text='od',
+        size=alt.value(10)
+    )
+
+    # Create a data frame with as many columns as there are edges. 
+    # Each column is four points. 
+    edges = alt.Chart(edge_df).mark_rule(
+        strokeOpacity=.1,
+        stroke='yellow',
+    ).encode(
+        x = 'x:Q',
+        y = 'y:Q',
+        x2 = 'x2:Q',
+        y2 = 'y2:Q',
+        stroke = 'pax:Q',
+        strokeWidth = 'pax:Q' #'scaled_pax:Q'
+    ).transform_lookup(
+        # extract all flights with 'origin' from airports (state, lat, long)
+        lookup='id_f_y',   # needed to draw the line. 'origin' is in flights_airport.csv
+        from_=lookup_data
+    ).transform_lookup(
+        # extract all flights with 'destination' from airports (state, lat, long) renamed (state, lat2, long2)
+        lookup='id_nf_y',
+        from_=lookup_data,
+        as_=['x2', 'y2']
+    )
+
+    #edges_plus = alt.Chrt(edge_df).mark_line(
+        #stroke='orange',
+        #interpolate='step'
+    #).encode(
+    #)
+
+    mid_edges = alt.Chart(edge_df).mark_circle(color='yellow', size=100, opacity=0.1).encode(
+        x = 'mid_x:Q',
+        y = 'mid_y:Q',
+        tooltip= ['avail','planned','delta','pax']
+    ).transform_lookup(
+        # extract all flights with 'origin' from airports (state, lat, long)
+        lookup='id_f_y',   # needed to draw the line. 'origin' is in flights_airport.csv
+        from_=lookup_data
+    ).transform_lookup(
+        # extract all flights with 'destination' from airports (state, lat, long) renamed (state, lat2, long2)
+        lookup='id_nf_y',
+        from_=lookup_data,
+        as_=['x2', 'y2']
+    ).transform_calculate(
+        mid_x = '0.5*(datum.x2 + datum.x)',
+        mid_y = '0.5*(datum.y2 + datum.y)'
+    )
+
+    if which_tooltip == 'Edge':
+        col1.write("add edge tip")
+        mid_edges = mid_edges.add_selection(
+            edge_nearest
+        )
+    elif which_tooltip == 'Node':
+        col1.write("add node tip")
+        node_tooltips = node_tooltips.add_selection(
+            node_nearest
+        )
+    elif which_tooltip == 'Off':
+        col1.write("no tooltips")
+
+        
+    full_chart = (layers + edges + nodes + node_text + node_tooltips + mid_edges)
+    #full_chart = mid_edges
+
+    return full_chart
+
+
 """
 if dfs == None or key == None:
     st.write(f"no graph, dfs or key is None")
@@ -303,7 +512,8 @@ else:
 """
 
 
-chart2 = drawPlot2(node_df, edge_df, which_tooltip)
+# Experimental. Use drawPlot2 for stable results
+chart2 = drawPlot3(node_df, edge_df, which_tooltip)
 col2.altair_chart(chart2, use_container_width=True)
 st.stop()
 
