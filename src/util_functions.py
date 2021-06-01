@@ -2048,6 +2048,7 @@ def handleCity(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print=True
         id_f = fsu_pax.id_f_x
         id_nf = fsu_pax.id_nf_x
         available = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().IN_DTMZ) / 1e9 / 60
+        wt.write("noID: available= ", available)
         planned   = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().SCH_ARR_DTMZ) / 1e9 / 60
         delta = planned - available   # = IN - SCH_ARR
         dep_delay = (fsu_pax.OUT_DTMZ - fsu_pax.SCH_DEP_DTMZ) / 1e9 / 60
@@ -2175,8 +2176,15 @@ def handleCityGraph(keep_early_arr, city, choice_ix, id_list, fsu, bookings_f, f
 
         # Create Graph edges and metadata
         id_f_nf = id_f + "_" + id_nf
-        available = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().IN_DTMZ) / 1e9 / 60
-        planned = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().SCH_ARR_DTMZ) / 1e9 / 60
+        #st.write("handleGraph, fsu_inbound= ", fsu_inbound)
+        #st.write("IN_DTMZ: ", fsu_inbound.IN_DTMZ)
+        #st.write("SCH_DEP_DTMZ: ", fsu_outbound.SCH_DEP_DTMZ)
+        # Not clear why transpose is no longer needed. 
+        available = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.IN_DTMZ) / 1e9 / 60
+        planned = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.SCH_ARR_DTMZ) / 1e9 / 60
+        #st.write("available= ", available)
+        #available = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().IN_DTMZ) / 1e9 / 60
+        #planned = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().SCH_ARR_DTMZ) / 1e9 / 60
         pax_id_nf = fsu_pax.id_nf_y
         pax_id_f  = fsu_pax.id_f_y
         pax_avail = (fsu_pax.SCH_DEP_DTMZ - fsu_inbound.transpose().IN_DTMZ) / 1e9 / 60
@@ -2191,13 +2199,17 @@ def handleCityGraph(keep_early_arr, city, choice_ix, id_list, fsu, bookings_f, f
         id_f = fsu_pax['id_f_y']
         id_nf = fsu_pax['id_nf_y']
         id_f_nf = fsu_pax['id_f_nf']
+        #st.write("No ID, fsu_pax: ", fsu_pax.shape)
         edge_df = pd.DataFrame()
         edge_df = pd.concat([edge_df, id_f_nf, id_f, id_nf], axis=1)
+        #st.write("No ID, edge_df: ", edge_df.shape)
+
         ## Reorder the columns for clarity
         edge_df['avail'] = available
         edge_df['planned'] = planned
         edge_df['delta'] = delta
         edge_df['pax'] = fsu_pax.pax_nf
+
         ## EDGE correct. Now add metadata: avail, planned, delta
  
         # Remove edges and nodes for flights with less available connection time than `delay`
@@ -2207,22 +2219,32 @@ def handleCityGraph(keep_early_arr, city, choice_ix, id_list, fsu, bookings_f, f
         #st.write(node_df.columns)
         #st.write(edge_df.columns)
         # 1. find all nodes to remove
-        ids_nf_to_keep = edge_df[edge_df['avail'] > delay]['id_nf_y']
+        # The passengers that "could" miss their flights have less available time than needed. 
+        # We keep the flights that potentially have the most impact on the network 
+        ids_nf_to_keep = edge_df[edge_df['avail'] < delay]['id_nf_y']
+        #st.write("No ID, edge_df after filtering delays: ", edge_df.shape)
+        #st.write("ID, ids_nf_to_keep: ", ids_nf_to_keep)
+        #st.write("node_df: ", node_df)
+        #st.write("edge_df= ", edge_df)
+        #st.write("delay= ", delay)
+        #st.write("handleCitiesGraph, ids_nf_to_keep: ", ids_nf_to_keep)  # # EMPTY. WHY? 
 
         #st.write("ids_nf_to_keep: ", ids_nf_to_keep)
 
         # 2. delete nodes from node DataFrame
         node_df = node_df.set_index('id').loc[ids_nf_to_keep,:].reset_index()
         # Add back the first row that is the feeder (it stays)
+        #st.write("NoID, row_f= ", row_f)
         node_df.loc[-1] = row_f
         node_df = node_df.sort_index().reset_index(drop=True)
 
-        # 3. delete edgs from edge DataFrame
+        # 3. delete edges from edge DataFrame
         edge_df = edge_df.set_index('id_nf_y').loc[ids_nf_to_keep,:].reset_index()
 
-        #st.write("node_df: ", node_df)
-        #st.write("edge_df: ", edge_df)
+        #st.write("NoID, node_df: ", node_df)
+        #st.write("NoID, edge_df: ", edge_df)
         #st.write(node_df.shape, edge_df.shape)
+
 
         # Only the first ix
         return node_df, edge_df
@@ -2248,6 +2270,229 @@ def handleCityGraph(keep_early_arr, city, choice_ix, id_list, fsu, bookings_f, f
 
     return dfs
 
+#---------------------------------------------------------
+def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feeders, is_print=True, delay=45):
+    """
+    Given an inbound flight to PTY return the corresponding outbound flighs
+    Return a tuple of Dataframes with node and edges
+    """
+    #st.write("enter handleCityGraphId")
+
+    # I need to return two structures: nodes and edges. 
+    # This pair of structures should be returned for each flight I am working with. 
+    # Nodes are single IDs with arr and dep times, arr and dep delays. 
+    # Edges are double IDs with PAX, rotation, and connection times. 
+
+    #st.write("Enter handleCityGraph")
+
+    inbound = flight_id
+    #city_inbounds = findCity(bookings_f, city)
+
+    """
+    if choice_ix == 'all':
+        min_ix = 0
+        max_ix = city_inbounds.shape[0]
+    else:
+        min_ix = choice_ix
+        max_ix = choice_ix+1
+    """
+    min_ix, max_ix = 0, 1
+
+    # For each inbound flight, compute the corresponding outbound flights
+    for which_ix in range(min_ix, max_ix):
+        nodes = []
+
+        inbound = pd.DataFrame({'id':[inbound]})  # New, created from method argument
+        #st.write(inbound)
+
+        try:
+            #inbound = city_inbounds.iloc[which_ix].id_f
+            nodes.append(inbound)
+            # keep: id_f only ==> a node
+            #st.write("inbound= " , inbound)
+            #st.write("inbound['id']= " , inbound['id'])
+            #st.write("inbound.values= " , inbound['id'].values)
+            #st.write("type inbound.values= " , type(inbound['id'].values[0])) # str
+            #st.write("fsu == id: ", fsu[fsu['id'] == inbound['id'].values[0]]) # << ERROR
+            #fsu_inbound = fsu.set_index('id').loc[inbound]
+            fsu_inbound = fsu[fsu['id'] == inbound['id'].values[0]]
+        except:
+            st.write("except")
+            continue
+
+        inbound_arr_delay = fsu_inbound.ARR_DELAY_MINUTES.values[0]
+        
+        # if the arrival delay of the inbound is negative, the plane arrived early, and the 
+        # passengers have time to connect
+        #st.write("inbound_arr_delay= ", inbound_arr_delay)  # DF
+
+        if keep_early_arr == False and inbound_arr_delay < 0:
+            st.write("continue")
+            continue
+
+        # just a collection of 'id_nf' ==> nodes
+        #st.write("inbound= ", inbound)
+        #st.write("id_list= ", id_list)
+        #inbound = inbound.values[0][0]
+        inbound = inbound['id'].values[0]  # Series convert to list using .values
+        #st.write("inbound= ", inbound)
+        outbounds = findOutboundIds(id_list, inbound).to_frame()
+        outbounds['id_f'] = inbound
+        #st.write("outbounds= ", outbounds)
+        nodes.extend(outbounds['id_nf'].tolist())  # This is the list of nodes
+
+        edges = outbounds['id_nf'].to_frame('e2')  # e2 is id_nf
+        edges['e1'] = inbound   # e1 is id_f
+        edges['id'] = edges['e1'] + '_' + edges['e2']
+
+
+        # What is left to do is add the metadata to these lists
+        # Nodes: the data comes from FSU files 
+        # Edges: the data comes from PAX files
+
+        # Create a unique id that combines inbound (feeder) and outbound flights
+        # This will allow me to merge two files with feeder/non-feeder columns
+        feeders_1 = feeders[feeders['id_f'] == inbound]
+        feeders_1['id_f_nf'] = feeders_1['id_f'] + '_' + feeders_1['id_nf']
+
+        # extract these outgoings from the FSU database
+        # if outbounds has ids not in fsu, this approach will not work
+        fsu_outbound = pd.merge(fsu, outbounds, how='inner', left_on='id', right_on='id_nf')
+        fsu_outbound['id_f_nf'] = fsu_outbound['id_f'] + '_' + fsu_outbound['id_nf']
+        #st.write("fsu_outbound= ", fsu_outbound)
+
+        fsu_pax = pd.merge(fsu_outbound, feeders_1, how='inner', left_on='id_f_nf', right_on='id_f_nf')
+        #fsu_outbound.to_csv("outbound_cityGraph.csv", index=0)
+        fsu_pax.drop_duplicates(inplace=True)
+        #st.write("fsu_pax= ", fsu_pax)
+
+        # Compute connection time (inbound.IN - outbound.sch_dep)
+        id_f = fsu_pax.id_f_x
+        id_nf = fsu_pax.id_nf_x
+        # Node metadata
+        dep_delay = (fsu_pax.OUT_DTMZ - fsu_pax.SCH_DEP_DTMZ) / 1e9 / 60
+        arr_delay = (fsu_pax.IN_DTMZ  - fsu_pax.SCH_ARR_DTMZ) / 1e9 / 60   # outbound
+        od = fsu_pax.OD
+        node_nf_dict = {'id':id_nf, 'arr_delay':arr_delay, 'dep_delay':dep_delay, 'od':od}
+        d_nf = pd.DataFrame(node_nf_dict)
+        #st.write("d_nf= ", d_nf)
+
+        # Add feeder row
+        # Find inbound in FSU data
+        # fsu_inbound is a Series. Another way to access : fsu_inbound.loc['SCH_DEP_DTMZ',0]
+        #st.write("fsu_inbound= ", fsu_inbound)
+        # I removed the transpose. Not clear why. 
+        #dep_delay = (fsu_inbound.OUT_DTMZ - fsu_inbound.transpose().SCH_DEP_DTMZ) / 1e9 / 60
+        dep_delay = (fsu_inbound.OUT_DTMZ - fsu_inbound.SCH_DEP_DTMZ) / 1e9 / 60
+        dep_delay = (fsu_inbound.OUT_DTMZ - fsu_inbound.SCH_DEP_DTMZ) / 1e9 / 60
+        arr_delay = (fsu_inbound.IN_DTMZ  - fsu_inbound.SCH_ARR_DTMZ) / 1e9 / 60   # outbound
+        dep_delay = dep_delay.values[0]  # Must fix this. Not clear why needed here.
+        arr_delay = arr_delay.values[0]
+
+        od = fsu_inbound.OD  # Series
+        od = od.values[0] # Series
+
+        row_f = {'id':inbound, 'arr_delay':arr_delay, 'dep_delay':dep_delay, 'od':od}
+        #st.write("ID, row_f= ", row_f)
+        d_nf.loc[-1] = row_f
+        # drop=True: do not keep the new index column created by default
+        node_df = d_nf.sort_index().reset_index(drop=True)
+
+        # The first node is the feeder
+        # All the other nodes are the outbounds
+
+        # Create Graph edges and metadata
+        id_f_nf = id_f + "_" + id_nf
+        # Why isn't IN_DTMZ a scalar like in the method handleCitiesGraph()?
+        #st.write("handleGraphID, fsu_inbound= ", fsu_inbound)
+        #st.write("IN_DTMZ: ", fsu_inbound.IN_DTMZ.values[0])
+        #st.write("SCH_DEP_DTMZ: ", fsu_outbound.SCH_DEP_DTMZ)
+        available = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.IN_DTMZ.values[0]) / 1e9 / 60
+        #st.write("ID: available= ", available)
+        planned = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.SCH_ARR_DTMZ.values[0]) / 1e9 / 60
+        #st.write("ID: planned= ", planned)
+
+        #available = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().IN_DTMZ) / 1e9 / 60
+        #planned = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().SCH_ARR_DTMZ) / 1e9 / 60
+        pax_id_nf = fsu_pax.id_nf_y
+        pax_id_f  = fsu_pax.id_f_y
+        #pax_avail = (fsu_pax.SCH_DEP_DTMZ - fsu_inbound.transpose().IN_DTMZ) / 1e9 / 60
+        #pax_planned = (fsu_pax.SCH_DEP_DTMZ - fsu_inbound.transpose().SCH_ARR_DTMZ) / 1e9 / 60
+        pax_avail = (fsu_pax.SCH_DEP_DTMZ - fsu_inbound.IN_DTMZ.values[0]) / 1e9 / 60
+        pax_planned = (fsu_pax.SCH_DEP_DTMZ - fsu_inbound.SCH_ARR_DTMZ) / 1e9 / 60
+        dfx = pd.DataFrame([pax_id_f, pax_id_nf, pax_avail, pax_planned]).transpose()
+        #st.write("1 node_df: ", node_df)
+
+        fsux = fsu[fsu['id'] == '2019/10/01SJOPTY10:29459']
+        fsuy = fsu[fsu['id'] == '2019/10/01PTYTPA14:12393']
+
+        delta = planned - available   # = IN - SCH_ARR
+        edge_nf_zip = zip(available, planned, delta)
+        id_f = fsu_pax['id_f_y']
+        id_nf = fsu_pax['id_nf_y']
+        id_f_nf = fsu_pax['id_f_nf']
+        edge_df = pd.DataFrame()
+        edge_df = pd.concat([edge_df, id_f_nf, id_f, id_nf], axis=1)
+        #st.write("ID, edge_df: ", edge_df.shape)
+        ## Reorder the columns for clarity
+        edge_df['avail'] = available
+        edge_df['planned'] = planned
+        edge_df['delta'] = delta
+        edge_df['pax'] = fsu_pax.pax_nf
+        #st.write("ID, fsu_pax: ", fsu_pax.shape)
+        ## EDGE correct. Now add metadata: avail, planned, delta
+ 
+        # Remove edges and nodes for flights with less available connection time than `delay`
+        # (I could either simplify the graph, or use brushing in the graph. Or both.)
+        # Let us do both. Simplification in this method, and brushing in Altair. 
+
+        #st.write(node_df.columns)
+        #st.write(edge_df.columns)
+        # 1. find all nodes to remove
+        # The passengers that "could" miss their flights have less available time than needed. 
+        # We keep the flights that potentially have the most impact on the network 
+        #st.write("delay= ", delay)
+
+        ids_nf_to_keep = edge_df[edge_df['avail'] < delay]['id_nf_y']
+
+        #st.write("ID, ids_nf_to_keep: ", ids_nf_to_keep)
+        #st.write("ID, edge_df after filtering delays: ", edge_df.shape)
+
+        #st.write("ids_nf_to_keep: ", ids_nf_to_keep)
+
+        # 2. delete nodes from node DataFrame
+        #st.write("node_df: ", node_df)
+        #st.write("edge_df= ", edge_df)
+        #st.write("delay= ", delay)
+        node_df = node_df.set_index('id').loc[ids_nf_to_keep,:].reset_index()
+        #st.write("3 node_df: ", node_df)  # EMPTY
+        # Add back the first row that is the feeder (it stays)
+        node_df.loc[-1] = row_f
+        node_df = node_df.sort_index().reset_index(drop=True)
+
+
+        # 3. delete edges from edge DataFrame
+        edge_df = edge_df.set_index('id_nf_y').loc[ids_nf_to_keep,:].reset_index()
+
+        #st.write("ID, last node_df: ", node_df)
+        #st.write("ID, last edge_df: ", edge_df)
+
+        #st.write("node_df: ", node_df)
+        #st.write("edge_df: ", edge_df)
+        #st.write(node_df.shape, edge_df.shape)
+
+        # Only the first ix
+        #st.write(node_df)
+        #st.write(edge_df)
+        return node_df, edge_df
+
+#---------------------------------------------------------
+#---------------------------------------------------------
+#---------------------------------------------------------
+#---------------------------------------------------------
+#---------------------------------------------------------
+#---------------------------------------------------------
+#---------------------------------------------------------
 #---------------------------------------------------------
 #---------------------------------------------------------
 #---------------------------------------------------------
