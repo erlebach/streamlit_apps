@@ -193,11 +193,165 @@ node_df1, edge_df1 = u.handleCityGraphId(
 # Using nodes 1 (0-indexed) and beyond, determine the next flight leaving the city. 
 # Given an OD: ORIG-DEST, outbound from PTY, figure out the next inbound flight to PTY. 
 # Search the fsu table for DEST_ORIG, and find all flights whose departure time follows the 
-# arrival time of ORIG-DEST. 
+# arrival time of ORIG-DEST on the same day, although days can be tricky since a flight arriving at BSB at 
+# Flight departs for BSB at 20:42 (18:42 local time), and departs for PTY at 
 
-st.write("node_df1: ", node_df1)
-nodes = node_df1.iloc[1:,:]
-st.write("nodes: ", nodes)
+# Given 2019/10/01PTYBSB20:42205, find the next flights. 
+st.write(id_list.columns)
+idd = id_list[id_list['id_nf'] == '2019/10/01PTYBSB20:42205']
+st.write("idd= ", idd)
+
+fsuu = fsu[fsu['OD'] == 'BSBPTY'][['id','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']]
+st.write("fsuu= ", fsuu)
+fsuu = fsu[fsu['OD'] == 'PTYBSB'][['id','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']]
+st.write("fsuu= ", fsuu)
+
+nodes2 = node_df1.iloc[1:]
+st.write("nodes2: ", nodes2)
+
+outbound_ids = nodes2['id'].tolist()
+st.write("nodes2: ", outbound_ids)
+
+for id in outbound_ids:
+    st.write("==> id: ", id)
+    #idd = id_list[id_list['id_nf'] == id]
+    #st.write("idd: ", idd)
+    od = id[10:16]
+    st.write("od: ", od)
+    fsuu = fsu[fsu['OD'] == od][['id','OD','SCH_DEP_TMZ','SCH_ARR_TMZ','TAIL']]
+    st.write("fsuu= ", fsuu)
+    fsuu = fsu[fsu['OD'] == od][['id','OD','SCH_DEP_TMZ','SCH_ARR_TMZ','TAIL']]
+    st.write("fsuu= ", fsuu)
+
+# It will be more efficient to preprocess the fsu table (for one day or the entire table). 
+# For each fight reaching a city other than PTY, compute the connecting flight (the same tail). 
+# Note that some days, there are multiple tails. 
+# Perhaps start with a groupby by tail? 
+
+# Add a additional row
+# Rows with flight PTY-X
+def addRow(df, new_od):
+    last_row = fsu.tail(1).copy()
+    #st.write(last_row.shape)
+    last_row['OD'] = new_od
+    df = pd.concat([df, last_row])
+    #st.write(df['OD'].tail())
+    return df
+
+def groupFSUbyTail(fsu0):
+    fsu = fsu0.copy()
+    fsu['nb_tails'] = fsu.groupby('TAIL')['id'].transform('size')
+    fsu['earliest_dep'] = fsu.groupby('TAIL')['SCH_DEP_TMZ'].transform('min')
+    fsu = fsu.sort_values(['TAIL', 'SCH_DEP_DTMZ'], axis=0)
+    fsu = addRow(fsu, new_od='XXXXXX')
+    return fsu
+
+# Following a tail throughout the day is now very easy. 
+
+# What I really need (for an entire day). 
+# For each outbound flight to city X, determine the next flight leaving X for PTY with the 
+# same tail. On occasions, tails will be changed, but this is ignored. 
+# 
+# The algorithm is simple and as follows: 
+# 1) identify all rows with a flight PTY-X
+# 2) The desired flight is the next row. On occasion, the next row will not match. 
+#    We will deal with that later. 
+#    Worry about edge effects. For example, the last row will not have a next row. Easiest
+#    solution: Copy the last row to create a new row, and make the OD='XXXPTY'
+
+# TRacking by tail works most of the time, but not all the time. 
+# I need a better algorithm to find connections at outside cities (non-PTY)
+
+
+fsu = groupFSUbyTail(fsu)
+fsu = fsu.reset_index(drop=True)
+st.write("fsu: ", fsu['TAIL'])
+indices  = fsu.index[fsu['OD'].str[0:3] == 'PTY']
+st.write(indices)
+
+fsu1 = fsu.iloc[indices]
+fsu2 = fsu.iloc[indices+1,:]   #<<< ERROR
+
+st.write("fsu.shape: ", fsu.shape)
+st.write("fsu1.shape: ", fsu1.shape)
+st.write("fsu2.shape: ", fsu2.shape)
+
+st.write("fsu: ",  fsu[['TAIL','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']])
+st.write("fsu1: ",  fsu1[['TAIL','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']])
+
+# Concatenate f2 and f3 horizonally (axis=1)
+# Given a flight id, I want the connecting flight ID
+#fsu4 = pd.concat([fsu1, fsu2], axis=1) # not done correctly
+#st.write("fsu4= ", fsu4['id'])
+#st.write("fsu4.shape= ", fsu4.shape)
+
+ids_PTYX = fsu1[['id','TAIL']]
+ids_XPTY = fsu2[['id','TAIL']]
+st.write("ids_PTYX= ", ids_PTYX)
+st.write("ids_XPTY= ", ids_XPTY)
+
+# Dictionary only computed once
+dct = {}
+nodct = {}
+ptyx = ids_PTYX['id'].tolist()
+xpty = ids_XPTY['id'].tolist()
+
+for i in range(ids_PTYX.shape[0]):
+    if ptyx[i][13:16] == xpty[i][10:13]:
+        dct[ptyx[i]] = xpty[i]
+    else: 
+        nodct[ptyx[i]] = xpty[i]
+
+for k,v in dct.items():
+    st.write("dct: ", k, v)
+
+for k,v in nodct.items():
+    st.write("nodct: ", k, v)
+
+# 70 elements out of 120
+st.write("dict length: ", len(dct))
+st.write("nodict length: ", len(nodct))
+
+
+
+st.stop()
+
+fsu['nb_tails'] = fsu.groupby('TAIL')['id'].transform('size')
+fsu['earliest_dep'] = fsu.groupby('TAIL')['SCH_DEP_TMZ'].transform('min')
+st.write(fsu[['id','nb_tails']])
+# It appears that the first flight of each tail is an inbound flight into PTY. I wonder if that is always true.
+# Interest rows are the ones with 3,5,7 tails. I would expect the number of flights with a given tail to be an even number.
+
+st.write(fsu.columns)
+st.write("\n3 flights per day with the same tail")
+fss = fsu[fsu['nb_tails'] == 3].reset_index()[['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD','SCH_DEP_DTMZ']]
+st.write(fss.columns)
+
+fss = fss.sort_values(['TAIL', 'SCH_DEP_DTMZ'], axis=0)
+st.write("fss: ", fss)
+
+# I find that when there are three flights per day with a given tail, 
+# in all cases (except for 3), the flight originates outside PTY. In 
+# three cases, the flight originates in PTY. At least on Oct. 01, 2019.
+st.write(fss.iloc[range(0,fss.shape[0],3),:][['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD']])
+
+st.write("\n5 flights per day with the same tail")
+fss = fsu[fsu['nb_tails'] == 5].reset_index()[['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD','SCH_DEP_DTMZ']]
+st.write(fss.columns)
+fss = fss.sort_values(['TAIL', 'SCH_DEP_DTMZ'], axis=0)
+st.write("fss: ", fss)
+
+# I find that when there are five flights per day with a given tail, 
+# in all cases, the flight originates outside PTY. 
+# There are 5 flights for only HAV, MDE, VVI, GYE, SDQ, POS, POA
+st.write(fss.iloc[range(0,fss.shape[0],5),:][['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD']])
+
+st.write("7 flights per day with the same tail: None")
+fss = fsu[fsu['nb_tails'] == 7].reset_index()[['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD','SCH_DEP_DTMZ']]
+
+st.write(fss.iloc[range(0,fss.shape[0],7),:][['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD']])
+
+
 
 #------------------------------------------------------------
 
