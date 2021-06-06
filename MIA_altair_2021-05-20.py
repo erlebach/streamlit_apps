@@ -246,6 +246,146 @@ def groupFSUbyTail(fsu0):
     fsu = addRow(fsu, new_od='XXXXXX')
     return fsu
 
+def groupFSUbyTail1(fsu0):
+    # Here is a better approach to identifying flight connections in outside cities. 
+    fsu = fsu0.copy()
+    # Group by tails. Each row now includes the number of each tail 
+    fsu['nb_tails'] = fsu.groupby('TAIL')['id'].transform('size')
+    fsu = fsu.sort_values(['TAIL','SCH_DEP_TMZ'])
+    #st.write("count values: ", fsu['nb_tails'].value_counts())
+
+    # on Oct 1, 2019, there are: 
+    # 6 tails flew once that day
+    # 38 tails flew 2 times
+    # 99 tails flew 3 times
+    # 104 tails flew 4 times
+    # 35 tails flew 5 times
+    # We concentrate on the odd case
+
+    def analyzeTailCount(fsu, cols):
+        fsu_1 = fsu[fsu['nb_tails'] == 1]
+        fsu_3 = fsu[fsu['nb_tails'] == 3]
+        fsu_5 = fsu[fsu['nb_tails'] == 5]
+        fsu_2 = fsu[fsu['nb_tails'] == 2]
+        fsu_4 = fsu[fsu['nb_tails'] == 4]
+        st.write(fsu_1['OD'])
+        st.write("fsu_1: ", fsu_1[cols])
+        st.write("fsu_3: ", fsu_3[cols])
+        st.write("fsu_5: ", fsu_5[cols])
+        st.write("fsu_2: ", fsu_2[cols])
+        st.write("fsu_4: ", fsu_4[cols])
+
+    cols = ['id','OD','TAIL','SCH_DEP_TMZ','SCH_ARR_TMZ']
+    #analyzeTailCount(fsu, cols)
+
+    #-------------------------------------------
+    def computeFlightPairs(fsu):
+        fsu1 = fsu.shift(periods=-1)
+        #st.write(fsu.shape, fsu1.shape)
+        #st.write("fsu: ", fsu[cols].head())
+        #st.write("fsu1: ", fsu1[cols].head())
+    
+        flight_pairs = pd.DataFrame({'id1':fsu['id'], 'id2':fsu1['id'],
+            'od1':fsu['OD'], 'od2':fsu1['OD'],
+            'tail1':fsu['TAIL'], 'tail2':fsu1['TAIL'],
+            'dep1':fsu['SCH_DEP_TMZ'], 'arr1':fsu['SCH_ARR_TMZ'],
+            'dep2':fsu1['SCH_DEP_TMZ'], 'arr2':fsu1['SCH_ARR_TMZ']})
+        flight_pairs = flight_pairs[flight_pairs['tail1'] == flight_pairs['tail2']]
+        bad_flight_pairs = flight_pairs[flight_pairs['od1'].str[3:6] != flight_pairs['od2'].str[0:3]]
+        st.write("flight_pairs: ", flight_pairs)
+        st.write("bad_pairs: ", bad_flight_pairs)
+    
+        # Apparently, 
+        # Tail HP1722 was transferred from SJO to TGU on 2019/10/01
+        # Tail HP1829: not clear. But something happened on 2019/10/01
+        # Tail HP1857 was transferred from TGU to SJO on 2019/10/01
+        tail1722 = fsu[fsu['TAIL'] == 'HP1722']
+        tail1829 = fsu[fsu['TAIL'] == 'HP1829']
+        tail1857 = fsu[fsu['TAIL'] == 'HP1857']
+
+        st.write("tail1722: ", tail1722[cols])
+        st.write("tail1829: ", tail1829[cols])
+        st.write("tail1857: ", tail1857[cols])
+
+        # A flight arrives at SJO at 14:16 pm (Zulu), HP1722. 
+        # Two different nearest flights depart SJO at 14:25 and 17:28. 
+        # They are different tails. So their departures can only be affected
+        # by incoming pax. 
+        fsu_sjo = fsu[fsu['OD'] == 'SJOPTY']
+        st.write("fsu_sjo: ", fsu_sjo[cols].sort_values('SCH_DEP_TMZ'))
+        return flight_pairs, bad_flight_pairs
+
+    flight_pairs, bad_pairs = computeFlightPairs(fsu)
+
+
+    #-------------------------
+    def getInbounds(df, flight_id):
+        """
+        Given a flight_id (string) to city X, return all flights from city X
+        back to PTY, sorted chronologically
+        """
+        inbound_od = flight_id[13:16] + 'PTY'
+        fsu_X = df[df['OD'] == inbound_od]
+
+        if fsu_X.shape[0] == 0:
+            st.write("<<<< fsu_X.shape[0]: ", fsu_X.shape[0])
+            return None
+
+        fsu_X = fsu_X.sort_values('SCH_DEP_TMZ')
+        return fsu_X
+
+    #-------------------------
+    def findNextDepartures(f_od, pty_outbound_id, pty_inbounds):
+        """
+        Return the two departures closest to the arrival time of pty_outbound_id
+        Return two full records (or only one if only one is available
+        """
+        arr_time = pty_outbound_id[16:20]
+        lst = pty_inbounds[pty_inbounds['SCH_DEP_TMZ'] > arr_time]
+        if lst.shape[0] <= 2:
+            return lst
+        else:
+            return lst.iloc[0:2]
+
+    # pty_outbound_id NOT DEFINED
+    lst = findNextDepartures(df, pty_outbound_id, pty_inbounds)
+    st.write("lst: ", lst[cols])
+    return lst
+
+    #-------------------------
+    def inboundOutboundDict(f_od, fsu_ids):
+        dct = {}
+        for i in range(fsu_ids.shape[0]):
+            outbound_id = fsu_ids[i]
+            pty_inbounds = getInbounds(fsu, outbound_id)
+            # 1 or 2 next departures
+            next_departures = findNextDepartures(f_od, outbound_id, pty_inbounds)
+            dct[outbound_id] = next_departures
+        return dct
+
+    # Precalculate (for one day) the 1-2 flights from city X following the inbound flight. The assumption is that one of these will be the correct flight to follow. Ideally, the tail should be the same as the incoming flight. 
+
+    # Given an OD pair PTY-X, list all departures in ascending order, Zulu.
+    f_od = fsu[cols].sort_values(['OD','SCH_DEP_TMZ'])
+    st.write("f_od: ", f_od)
+
+    fsu_ids = f_od[f_od['OD'].str[0:3] == 'PTY']['id'].values
+    st.write("=========================")
+    st.write("fsu_ids.shape: ", fsu_ids.shape)
+    dct = inboundOutboundDict(f_od, fsu_ids)
+
+
+    st.stop()
+
+    # For each group, add a row if there is an odd number of tails
+    # 1 flight for a tail per day
+    # 3 flights for a tail per day
+    # 5 flights for a tail per day
+    # 7 flights for a tail per day
+    fsu['earliest_dep'] = fsu.groupby('TAIL')['SCH_DEP_TMZ'].transform('min')
+    fsu = fsu.sort_values(['TAIL', 'SCH_DEP_DTMZ'], axis=0)
+    fsu = addRow(fsu, new_od='XXXXXX')
+
 # Following a tail throughout the day is now very easy. 
 
 # What I really need (for an entire day). 
@@ -262,6 +402,10 @@ def groupFSUbyTail(fsu0):
 # TRacking by tail works most of the time, but not all the time. 
 # I need a better algorithm to find connections at outside cities (non-PTY)
 
+next_departures = groupFSUbyTail1(fsu)
+st.write("next_departures")
+st.write(next_departures)
+st.stop()
 
 fsu = groupFSUbyTail(fsu)
 fsu = fsu.reset_index(drop=True)
@@ -285,34 +429,39 @@ st.write("fsu1: ",  fsu1[['TAIL','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']])
 #st.write("fsu4= ", fsu4['id'])
 #st.write("fsu4.shape= ", fsu4.shape)
 
-ids_PTYX = fsu1[['id','TAIL']]
-ids_XPTY = fsu2[['id','TAIL']]
-st.write("ids_PTYX= ", ids_PTYX)
-st.write("ids_XPTY= ", ids_XPTY)
 
 # Dictionary only computed once
-dct = {}
-nodct = {}
-ptyx = ids_PTYX['id'].tolist()
-xpty = ids_XPTY['id'].tolist()
+def computeDict(fsu1, fsu2):
+    dct = {}
+    nodct = {}
 
-for i in range(ids_PTYX.shape[0]):
-    if ptyx[i][13:16] == xpty[i][10:13]:
-        dct[ptyx[i]] = xpty[i]
-    else: 
-        nodct[ptyx[i]] = xpty[i]
+    ids_PTYX = fsu1[['id','TAIL']]
+    ids_XPTY = fsu2[['id','TAIL']]
+    st.write("ids_PTYX= ", ids_PTYX)
+    st.write("ids_XPTY= ", ids_XPTY)
 
-for k,v in dct.items():
-    st.write("dct: ", k, v)
+    ptyx = ids_PTYX['id'].tolist()
+    xpty = ids_XPTY['id'].tolist()
+    
+    for i in range(ids_PTYX.shape[0]):
+        if ptyx[i][13:16] == xpty[i][10:13]:
+            dct[ptyx[i]] = xpty[i]
+        else: 
+            nodct[ptyx[i]] = xpty[i]
+    return dct, nodct
 
-for k,v in nodct.items():
-    st.write("nodct: ", k, v)
+dct,nodct = computeDict(fsu1, fsu2)
+st.write("dct items")
+st.write(dct)
+st.write("nodct items")
+st.write(nodct)
+
+
+st.stop()
 
 # 70 elements out of 120
 st.write("dict length: ", len(dct))
 st.write("nodict length: ", len(nodct))
-
-
 
 st.stop()
 
