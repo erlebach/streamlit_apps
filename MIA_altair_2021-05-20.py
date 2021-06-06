@@ -8,6 +8,7 @@
 
 
 import streamlit as st
+import src.altair_support as altsup
 import sys
 sys.path[2] = "."
 
@@ -329,7 +330,7 @@ def groupFSUbyTail1(fsu0):
 
         if fsu_X.shape[0] == 0:
             st.write("<<<< fsu_X.shape[0]: ", fsu_X.shape[0])
-            return None
+            return pd.DataFrame()
 
         fsu_X = fsu_X.sort_values('SCH_DEP_TMZ')
         return fsu_X
@@ -347,10 +348,9 @@ def groupFSUbyTail1(fsu0):
         else:
             return lst.iloc[0:2]
 
-    # pty_outbound_id NOT DEFINED
-    lst = findNextDepartures(df, pty_outbound_id, pty_inbounds)
-    st.write("lst: ", lst[cols])
-    return lst
+        #lst = findNextDepartures(df, pty_outbound_id, pty_inbounds)
+        #st.write("lst: ", lst[cols])
+        #return lst
 
     #-------------------------
     def inboundOutboundDict(f_od, fsu_ids):
@@ -358,6 +358,11 @@ def groupFSUbyTail1(fsu0):
         for i in range(fsu_ids.shape[0]):
             outbound_id = fsu_ids[i]
             pty_inbounds = getInbounds(fsu, outbound_id)
+            #st.write("pty_inbounds= ", pty_inbounds)
+            if pty_inbounds.shape[0] == 0:
+                # One flight has no inbounds on 2019/10/01
+                st.write("<<< outbound_id: ", outbound_id, ",  no inbounds")
+                continue
             # 1 or 2 next departures
             next_departures = findNextDepartures(f_od, outbound_id, pty_inbounds)
             dct[outbound_id] = next_departures
@@ -373,7 +378,7 @@ def groupFSUbyTail1(fsu0):
     st.write("=========================")
     st.write("fsu_ids.shape: ", fsu_ids.shape)
     dct = inboundOutboundDict(f_od, fsu_ids)
-
+    return dct
 
     st.stop()
 
@@ -399,29 +404,42 @@ def groupFSUbyTail1(fsu0):
 #    Worry about edge effects. For example, the last row will not have a next row. Easiest
 #    solution: Copy the last row to create a new row, and make the OD='XXXPTY'
 
-# TRacking by tail works most of the time, but not all the time. 
+# Tracking by tail works most of the time, but not all the time. 
 # I need a better algorithm to find connections at outside cities (non-PTY)
 
-next_departures = groupFSUbyTail1(fsu)
-st.write("next_departures")
-st.write(next_departures)
-st.stop()
+#next_departures = groupFSUbyTail1(fsu)
+dct = groupFSUbyTail1(fsu)
+#st.write("next_departures")
+#st.write(dct['2019/10/01PTYPAP13:45202'])
 
-fsu = groupFSUbyTail(fsu)
-fsu = fsu.reset_index(drop=True)
-st.write("fsu: ", fsu['TAIL'])
-indices  = fsu.index[fsu['OD'].str[0:3] == 'PTY']
-st.write(indices)
+#-------------------------------------------
+def misc1(fsu):
+    fsu = groupFSUbyTail(fsu)
+    fsu = fsu.reset_index(drop=True)
+    #st.write("fsu: ", fsu['TAIL'])
 
-fsu1 = fsu.iloc[indices]
-fsu2 = fsu.iloc[indices+1,:]   #<<< ERROR
+    # Ids of outbound flights originating in PTY 
+    indices  = fsu.index[fsu['OD'].str[0:3] == 'PTY']
+    #st.write(indices)
 
-st.write("fsu.shape: ", fsu.shape)
-st.write("fsu1.shape: ", fsu1.shape)
-st.write("fsu2.shape: ", fsu2.shape)
+    fsu_outbound = fsu.iloc[indices]
+    fsu_inbound  = fsu.iloc[indices+1,:]   #<<< ERROR
 
-st.write("fsu: ",  fsu[['TAIL','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']])
-st.write("fsu1: ",  fsu1[['TAIL','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']])
+    st.write("fsu.shape: ", fsu.shape)
+    st.write("fsu_inbound.shape: ",  fsu_inbound.shape)
+    st.write("fsu_outbound.shape: ", fsu_outbound.shape)
+    
+    #st.write("fsu: ",  fsu[['TAIL','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']])
+    #st.write("fsu_outbound: ", fsu1[['TAIL','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']])
+    #st.write("fsu_inbound: ",  fsu2[['TAIL','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']])
+
+    # What is fsu1 and fsu2
+
+    return fsu_outbound, fsu_inbound
+
+#-------------------------------------------
+fsu_outbound, fsu_inbound = misc1(fsu)
+#-------------------------------------------
 
 # Concatenate f2 and f3 horizonally (axis=1)
 # Given a flight id, I want the connecting flight ID
@@ -448,61 +466,57 @@ def computeDict(fsu1, fsu2):
             dct[ptyx[i]] = xpty[i]
         else: 
             nodct[ptyx[i]] = xpty[i]
+
+    st.write("dct items")
+    st.write(dct)
+    st.write("nodct items")
+    st.write(nodct)
+    st.write("dict length: ", len(dct))
+    st.write("nodict length: ", len(nodct))
     return dct, nodct
 
-dct,nodct = computeDict(fsu1, fsu2)
-st.write("dct items")
-st.write(dct)
-st.write("nodct items")
-st.write(nodct)
+dct, nodct = computeDict(fsu_outbound, fsu_inbound)
 
+def misc_computations(fsu):
+    """
+    I forgot what these were for
+    """
+    fsu['nb_tails'] = fsu.groupby('TAIL')['id'].transform('size')
+    fsu['earliest_dep'] = fsu.groupby('TAIL')['SCH_DEP_TMZ'].transform('min')
+    st.write(fsu[['id','nb_tails']])
+    # It appears that the first flight of each tail is an inbound flight into PTY. I wonder if that is always true.
+    # Interest rows are the ones with 3,5,7 tails. I would expect the number of flights with a given tail to be an even number.
 
-st.stop()
+    st.write(fsu.columns)
+    st.write("\n3 flights per day with the same tail")
+    fss = fsu[fsu['nb_tails'] == 3].reset_index()[['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD','SCH_DEP_DTMZ']]
+    st.write(fss.columns)
 
-# 70 elements out of 120
-st.write("dict length: ", len(dct))
-st.write("nodict length: ", len(nodct))
+    fss = fss.sort_values(['TAIL', 'SCH_DEP_DTMZ'], axis=0)
+    st.write("fss: ", fss)
 
-st.stop()
+    # I find that when there are three flights per day with a given tail, 
+    # in all cases (except for 3), the flight originates outside PTY. In 
+    # three cases, the flight originates in PTY. At least on Oct. 01, 2019.
+    st.write(fss.iloc[range(0,fss.shape[0],3),:][['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD']])
 
-fsu['nb_tails'] = fsu.groupby('TAIL')['id'].transform('size')
-fsu['earliest_dep'] = fsu.groupby('TAIL')['SCH_DEP_TMZ'].transform('min')
-st.write(fsu[['id','nb_tails']])
-# It appears that the first flight of each tail is an inbound flight into PTY. I wonder if that is always true.
-# Interest rows are the ones with 3,5,7 tails. I would expect the number of flights with a given tail to be an even number.
+    st.write("\n5 flights per day with the same tail")
+    fss = fsu[fsu['nb_tails'] == 5].reset_index()[['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD','SCH_DEP_DTMZ']]
+    st.write(fss.columns)
+    fss = fss.sort_values(['TAIL', 'SCH_DEP_DTMZ'], axis=0)
+    st.write("fss: ", fss)
 
-st.write(fsu.columns)
-st.write("\n3 flights per day with the same tail")
-fss = fsu[fsu['nb_tails'] == 3].reset_index()[['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD','SCH_DEP_DTMZ']]
-st.write(fss.columns)
+    # I find that when there are five flights per day with a given tail, 
+    # in all cases, the flight originates outside PTY. 
+    # There are 5 flights for only HAV, MDE, VVI, GYE, SDQ, POS, POA
+    st.write(fss.iloc[range(0,fss.shape[0],5),:][['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD']])
 
-fss = fss.sort_values(['TAIL', 'SCH_DEP_DTMZ'], axis=0)
-st.write("fss: ", fss)
+    st.write("7 flights per day with the same tail: None")
+    fss = fsu[fsu['nb_tails'] == 7].reset_index()[['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD','SCH_DEP_DTMZ']]
 
-# I find that when there are three flights per day with a given tail, 
-# in all cases (except for 3), the flight originates outside PTY. In 
-# three cases, the flight originates in PTY. At least on Oct. 01, 2019.
-st.write(fss.iloc[range(0,fss.shape[0],3),:][['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD']])
+    st.write(fss.iloc[range(0,fss.shape[0],7),:][['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD']])
 
-st.write("\n5 flights per day with the same tail")
-fss = fsu[fsu['nb_tails'] == 5].reset_index()[['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD','SCH_DEP_DTMZ']]
-st.write(fss.columns)
-fss = fss.sort_values(['TAIL', 'SCH_DEP_DTMZ'], axis=0)
-st.write("fss: ", fss)
-
-# I find that when there are five flights per day with a given tail, 
-# in all cases, the flight originates outside PTY. 
-# There are 5 flights for only HAV, MDE, VVI, GYE, SDQ, POS, POA
-st.write(fss.iloc[range(0,fss.shape[0],5),:][['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD']])
-
-st.write("7 flights per day with the same tail: None")
-fss = fsu[fsu['nb_tails'] == 7].reset_index()[['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD','SCH_DEP_DTMZ']]
-
-st.write(fss.iloc[range(0,fss.shape[0],7),:][['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD']])
-
-
-
-#------------------------------------------------------------
+    #------------------------------------------------------------
 
 # Create Altair Chart
 
@@ -511,80 +525,6 @@ st.write(fss.iloc[range(0,fss.shape[0],7),:][['id','FLT_NUM','TAIL','nb_tails','
 st.markdown('<style>#vg-tooltip-element{z-index: 1000051}</style>',
              unsafe_allow_html=True)
 
-def createStepLines(node_df, edge_df, edge_labels=('id_f_y','id_nf_y')):
-        """
-        Arguments
-            node_df: a dataframe with at least the three column labels 'id', 'x', 'y'. The id can be a string.
-            edge_df: a dataframe with two column names; 'id_f_y' (source), 'id_nf_y' (target). 
-            edge_labels: a tuple with the names of the edge source and destination labels. Default: ('id_f_y','id_nf_y')
-        Return 
-            a database with columns x0,y0,x1,y1, etc where (xi,yi) are the coordinates of an edge.
-        """
-        # Set up step (horizontal/vertical segments) lines
-        # For each edge, create a set of nodes, stored in a special dataframe
-        # For now, use loops since there are not many edges
-
-        e1 = edge_df[edge_labels[0]]
-        e2 = edge_df[edge_labels[1]]
-
-        # x,y of node 1 and 2 of each edge.
-        # Construct intermediate points (ids1a and ids1b)
-        ids1 = node_df.set_index('id').loc[e1.tolist()].reset_index()[['x','y']]
-        ids2 = node_df.set_index('id').loc[e2.tolist()].reset_index()[['x','y']]
-        ids1a = pd.DataFrame([ids1.x, 0.5*(ids1.y+ids2.y)]).transpose()
-        ids1b = pd.DataFrame([ids2.x, 0.5*(ids1.y+ids2.y)]).transpose()
- 
-        df_step = pd.concat([ids1, ids1a, ids1b, ids2], axis=1)
-        df_step.columns = ['x1','y1','x2','y2','x3','y3','x4','y4']
-
-        # Now create one line per edge: 
-        #  col 1: [x1,x2,x3,x4].row1
-        #  col 2: [y1,y2,y3,y4].row1
-        #  col 3: [x1,x2,x3,x4].row2
-        #  col 4: [y1,y2,y3,y4].row2
-        df_step_x = df_step[['x1','x2','x3','x4']].transpose()
-        df_step_y = df_step[['y1','y2','y3','y4']].transpose()
-
-        # relabel the columns of df_step_x as 'x0', 'x1', ..., 'x15'
-        # relabel the columns of df_step_y as 'y0', 'y1', ..., 'y15'
-        df_step_x.columns = ['x'+str(i) for i in range(df_step_x.shape[1])]
-        df_step_y.columns = ['y'+str(i) for i in range(df_step_y.shape[1])]
-
-        df_step_x = df_step_x.reset_index(drop=True)
-        df_step_y = df_step_y.reset_index(drop=True)
-
-        df_step = pd.concat([df_step_x, df_step_y], axis=1)
-
-        # Create a dataframe
-        df_step = df_step.reset_index()  # generates an index column
-        return df_step
-
-
-#----------------------------------------------------------------------------
-def drawStepEdges(df_step):
-        """
-        Arguments
-            df_step: An array where each column is either x or y coordinate of an edge composed of four points. 
-            The column names must be x0,y0,x1,y1, ... not in any particular order. 
-            An additional column labeled 'index' specifies the order of the nodes on each edge.
-
-        Return
-            The layer chart.
-        """
-        # Technique found at https://github.com/altair-viz/altair/issues/1036
-        base = alt.Chart(df_step)
-        layers = alt.layer(
-            *[  base.mark_line(
-                color='red',
-                opacity=1.0,
-                strokeWidth=2
-            ).encode(
-                x=alt.X('x'+str(i), axis=alt.Axis(title="Outbounds")), 
-                y=alt.Y('y'+str(i), axis=alt.Axis(title="", labels=False)),
-                order='index'
-            ) for i in range(int(df_step.shape[1]/2))
-            ], data=df_step)
-        return layers
 #--------------------------------------------------
 
 def drawPlot3(node_df, edge_df, which_tooltip):
@@ -601,8 +541,8 @@ def drawPlot3(node_df, edge_df, which_tooltip):
     node_df.loc[1:,'y'] = 0.3  # assumes node_df is ordered correctly (feeder first)
 
     # Create and draw edges as a series of horizontal and vertical lines
-    df_step = createStepLines(node_df, edge_df)
-    layers = drawStepEdges(df_step)
+    df_step = altsup.createStepLines(node_df, edge_df)
+    layers = altsup.drawStepEdges(df_step)
 
     # Set up tooltips searching via mouse movement
     node_nearest = alt.selection(type='single', nearest=True, on='mouseover',
@@ -728,95 +668,4 @@ else:
 st.stop()
 
 
-
-#----------------------------------------------
-@st.cache
-def createGraph(nb_nodes, nb_edges):
-    e1 = randint(nb_nodes, size=nb_edges)
-    e2 = randint(nb_nodes, size=nb_edges)
-    G = nx.DiGraph()
-
-    for i in range(nb_nodes):
-        G.add_node(i)
-
-    for i,j in zip(e1,e2):
-        G.add_edge(i,j)
-    return G
-
-G = createGraph(nb_nodes, nb_edges)
-
-#----------------------------------------------
-def drawPlot1(G):
-    # Start from Graph to create Data Frames
-    #   (normally, one would start with the data frame)
-    e1 = map(lambda x: x[0], G.edges())
-    e2 = map(lambda x: x[1], G.edges())
-    ed1 = [] 
-    ed2 = []
-    for i,j in zip(e1,e2):
-        ed1.append(i)
-        ed2.append(j)
-    
-    edges_df = pd.DataFrame({'e1':ed1, 'e2':ed2})
-    edges_df = edges_df.reset_index().rename(columns={'index':'id'})
-    
-    nodes_df = pd.DataFrame({'id':list(range(0,nb_nodes))})
-    
-    pos = normal(nb_nodes,2)
-    
-    nodes_df['x'] = pos[:,0]
-    nodes_df['y'] = pos[:,1]
-    # nodes: data frame with id, x, y
-    
-    # Create an Altair graph without ever creating a NetworkX graph. An actual graph structure would be necessary to compute graph metrics in certain circumstances. 
-    edges_df['e1'].dtype
-    
-    edges_df['e1'] = edges_df['e1'].astype('int')
-    edges_df['e2'] = edges_df['e2'].astype('int')
-    
-    edges_df.shape, nodes_df.shape
-    
-    lookup_data = alt.LookupData(
-        nodes_df, key="id", fields=["x", "y"]
-    )
-    
-    node_brush = alt.selection_interval()
-    
-    nodes = alt.Chart(nodes_df).mark_circle(size=10).encode(
-        x = 'x:Q',
-        y = 'y:Q',
-        color = 'y:N',
-        tooltip = ['x','y']
-    ).add_selection(
-        node_brush
-    )
-    
-    edges = alt.Chart(edges_df).mark_rule().encode(
-        x = 'x:Q',
-        y = 'y:Q',
-        x2 = 'x2:Q',
-        y2 = 'y2:Q',
-        color = 'x2:Q'
-    ).transform_lookup(
-        # extract all flights with 'origin' from airports (state, lat, long)
-        lookup='e1',   # needed to draw the line. 'origin' is in flights_airport.csv
-        from_=lookup_data
-    ).transform_lookup(
-        # extract all flights with 'destination' from airports (state, lat, long) renamed (state, lat2, long2)
-        lookup='e2',
-        from_=lookup_data,
-        as_=['x2', 'y2']
-    ).transform_filter(
-        node_brush
-    ).properties(width=1000, height=800)
-        
-    full_chart = (edges + nodes)
-    return full_chart
-
-chart1 = drawPlot1(G)
-#col2.chart(chart1)
-col2.altair_chart(chart1, use_container_width=True)
-#----------------------------------------------------------------------
-
-# Chart using Copa data
 
