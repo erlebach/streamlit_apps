@@ -7,49 +7,17 @@
 
 
 
-import streamlit as st
 import src.altair_support as altsup
+import networkx as nx
 import sys
+from src.template import *
 sys.path[2] = "."
-
-## BUGs to fix
 
 # When choosing the city LIM, the graph does not show properly. DO NOT KNOW WHY. 
 # Somehow fixed. 
 
-from src.template import *
-
-import altair as alt
-
-max_width = 1300
-padding_left = 3
-padding_right = 3
-padding_top = 10
-padding_bottom = 10
-BACKGROUND_COLOR = 'black'
-COLOR = 'lightgreen'
-
-st.markdown(
-        f"""
-<style>
-    .reportview-container .main .block-container{{
-        max-width: {max_width}px;
-        padding-top: {padding_top}rem;
-        padding-right: {padding_right}rem;
-        padding-left: {padding_left}rem;
-        padding-bottom: {padding_bottom}rem;
-    }}
-    .reportview-container .main {{
-        color: {COLOR};
-        background-color: {BACKGROUND_COLOR};
-    }}
-</style>
-""",
-        unsafe_allow_html=True,
-    )
-
-import networkx as nx
-#import draw_altair as da
+# Set parameters inside this function
+altsup.allowTooltipsInExpandedWindows()
 
 normal = np.random.rand
 randint = np.random.randint

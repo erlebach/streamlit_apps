@@ -1,5 +1,32 @@
 from src.template import *
 
+def allowTooltipsInExpandedWindows():
+    # Need a better way to set these. Perhaps in a dictionary set as 
+    # an argument? 
+    max_width = 1300
+    padding_left = 3
+    padding_right = 3
+    padding_top = 10
+    padding_bottom = 10
+    BACKGROUND_COLOR = 'black'
+    COLOR = 'lightgreen'
+
+    st.markdown(f"""
+    <style>
+        .reportview-container .main .block-container{{
+            max-width: {max_width}px;
+            padding-top: {padding_top}rem;
+            padding-right: {padding_right}rem;
+            padding-left: {padding_left}rem;
+            padding-bottom: {padding_bottom}rem;
+        }}
+        .reportview-container .main {{
+            color: {COLOR};
+            background-color: {BACKGROUND_COLOR};
+        }}
+    </style>
+    """, unsafe_allow_html=True,)
+
 #----------------------------------------------------------
 def createStepLines(node_df, edge_df, edge_labels=('id_f_y','id_nf_y')):
         """
