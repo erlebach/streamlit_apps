@@ -2084,7 +2084,6 @@ def handleCityGraph(keep_early_arr, city, choice_ix, id_list, fsu, bookings_f, f
     #st.write("????????????????")
     #st.write("Enter handleCityGraph")
     #st.write("fsu.SCH_DEP_DTMZ", fsu.SCH_DEP_DTMZ)
-    #st.write("xxxxx")
 
     # I need to return two structures: nodes and edges. 
     # This pair of structures should be returned for each flight I am working with. 
@@ -2271,10 +2270,14 @@ def handleCityGraph(keep_early_arr, city, choice_ix, id_list, fsu, bookings_f, f
     return dfs
 
 #---------------------------------------------------------
-def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feeders, is_print=True, delay=45):
+def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feeders, is_print=True, delay=45, flight_id_level=0):
     """
     Given an inbound flight to PTY return the corresponding outbound flighs
     Return a tuple of Dataframes with node and edges
+
+    Arguments
+
+      flight_id_level: level of flight_id in the graph network. The root has level zero. Children of flight_id have level 1, grandchildren of flight_id have level 2. Each leg of a flight increases the level by 1. 
     """
     #st.write("enter handleCityGraphId")
 
@@ -2392,11 +2395,15 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         od = fsu_inbound.OD  # Series
         od = od.values[0] # Series
 
-        row_f = {'id':inbound, 'arr_delay':arr_delay, 'dep_delay':dep_delay, 'od':od}
+        row_f = {'id':inbound, 'arr_delay':arr_delay, 'dep_delay':dep_delay, 'od':od, 'lev':flight_id_level}
         #st.write("ID, row_f= ", row_f)
         d_nf.loc[-1] = row_f
         # drop=True: do not keep the new index column created by default
         node_df = d_nf.sort_index().reset_index(drop=True)
+        #st.write("flight_id_level: ", flight_id_level)
+        node_df.loc[:,'lev'] = flight_id_level
+        node_df.loc[1:,'lev'] = flight_id_level + 1
+        #st.write("xxx node_df: ", node_df)
 
         # The first node is the feeder
         # All the other nodes are the outbounds
@@ -2465,6 +2472,7 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         #st.write("edge_df= ", edge_df)
         #st.write("delay= ", delay)
         node_df = node_df.set_index('id').loc[ids_nf_to_keep,:].reset_index()
+
         #st.write("3 node_df: ", node_df)  # EMPTY
         # Add back the first row that is the feeder (it stays)
         node_df.loc[-1] = row_f
@@ -2487,6 +2495,45 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         return node_df, edge_df
 
 #---------------------------------------------------------
+def getReturnFlights(node_df, edge_df, dct, flight_id_level=0):
+    # Scan each outbound flight on the graph and find the corresponding in inbound flight
+    #st.write("enter getReturn, node_df: ", node_df)
+    outbound_ids = node_df['id'].to_list()[1:]
+    #st.write(outbound_ids)
+    #st.write("0 node_df: ", node_df)
+    #st.write("0 edge_df: ", edge_df)
+    # Rewrite with map or apply. Do not know how as yet. 
+    for i, outbound in enumerate(outbound_ids):
+        #st.write(outbound, dct[outbound])
+        inbounds_df = dct[outbound]
+        if inbounds_df.shape[0] > 0:
+            inbound = inbounds_df.iloc[0].id
+            # Perhaps add a channel for the line type (dashed or solid)
+            # id_f refers to the source of the edge
+            # id_nf refers to the target
+            # id_f_nf has no meaning in this context
+            node_df.loc[10000+i,'id'] = inbound
+            node_df.loc[10000+i,'lev'] = flight_id_level
+            node_df.loc[10000+i,'od'] = inbound[10:16]
+            #st.write("xxx: ", node_df)
+            edge_df.loc[10000+i,['id_f_y','id_nf_y','id_f_nf']] = [outbound, inbound, np.nan]
+            try:
+                # Should find a better way to number the edges
+                # Or somehow use dictionaries
+                inbound = inbounds_df.iloc[1].id
+                node_df.loc[10000+1000+i,'id'] = inbound
+                node_df.loc[10000+1000+i,'lev'] = flight_id_level
+                edge_df.loc[10000+1000+i,['id_f_y','id_nf_y','id_f_nf']] = [outbound, inbound, np.nan]
+            except:
+                pass
+
+    node_df = node_df.reset_index(drop=True)
+    edge_df = edge_df.reset_index(drop=True)
+
+    #st.write("1 node_df: ", node_df)
+    #st.write("1 edge_df: ", edge_df)
+    return node_df, edge_df
+
 #---------------------------------------------------------
 #---------------------------------------------------------
 #---------------------------------------------------------
