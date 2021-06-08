@@ -44,19 +44,40 @@ def createStepLines(node_df, edge_df, edge_labels=('id_f_y','id_nf_y')):
         # For each edge, create a set of nodes, stored in a special dataframe
         # For now, use loops since there are not many edges
 
+        #st.write("createStepLines: node_df: ", node_df)
         e1 = edge_df[edge_labels[0]]
         e2 = edge_df[edge_labels[1]]
+        #st.write("e1= ", e1, e1.shape)
+        #st.write("e2= ", e2, e2.shape)
+        st.write("node_df= ", node_df)
 
         # x,y of node 1 and 2 of each edge.
         # Construct intermediate points (ids1a and ids1b)
         #st.write("createStepLines: ", node_df)
         ids1 = node_df.set_index('id').loc[e1.tolist()].reset_index()[['x','y']]
+        #st.write("ids1: ", ids1) # seems correct
+        #st.write("ids1: ", ids1.shape) # seems correct
+
         ids2 = node_df.set_index('id').loc[e2.tolist()].reset_index()[['x','y']]
+        #st.write("ids2: ", ids2) # ERROR: 4 additional rows. From where? 
+        #st.write("ids2: ", ids2.shape) # seems correct
+        #st.stop()
+
+        #st.write("edge_df: ", edge_df)
+
+        #st.stop()
+
+
         ids1a = pd.DataFrame([ids1.x, 0.5*(ids1.y+ids2.y)]).transpose()
+        #st.write("ids1a: ", ids1a) # seems correct
         ids1b = pd.DataFrame([ids2.x, 0.5*(ids1.y+ids2.y)]).transpose()
+        #st.write("ids1b: ", ids1b) # seems correct
  
         df_step = pd.concat([ids1, ids1a, ids1b, ids2], axis=1)
+        #st.write("df_step: ", df_step)
         df_step.columns = ['x1','y1','x2','y2','x3','y3','x4','y4']
+        #st.write("df_step: ", df_step)
+        #st.stop()
 
         # Now create one line per edge: 
         #  col 1: [x1,x2,x3,x4].row1
@@ -83,12 +104,13 @@ def createStepLines(node_df, edge_df, edge_labels=('id_f_y','id_nf_y')):
 
 
 #----------------------------------------------------------------------------
-def drawStepEdges(df_step):
+def drawStepEdges(df_step, scale):
         """
         Arguments
             df_step: An array where each column is either x or y coordinate of an edge composed of four points. 
             The column names must be x0,y0,x1,y1, ... not in any particular order. 
             An additional column labeled 'index' specifies the order of the nodes on each edge.
+            scale: scale parameter for xaxis
 
         Return
             The layer chart.
@@ -101,7 +123,7 @@ def drawStepEdges(df_step):
                 opacity=1.0,
                 strokeWidth=2
             ).encode(
-                x=alt.X('x'+str(i), axis=alt.Axis(title="Outbounds")), 
+                x=alt.X('x'+str(i), axis=alt.Axis(title="Outbounds"), scale=scale), 
                 y=alt.Y('y'+str(i), axis=alt.Axis(title="", labels=False)),
                 order='index'
             ) for i in range(int(df_step.shape[1]/2))
@@ -503,11 +525,22 @@ def drawPlot3(node_df, edge_df, which_tooltip):
     nb_nodes = node_df.shape[0]
     nb_edges = edge_df.shape[0]
 
+    xmax = 10.
+    st.write("************ xmax= ", xmax, "*******************")
+
+    # Is there a faster method? Do not add the duplicates in the first place. 
+    node_df = node_df.drop_duplicates(keep='first')
+
     node_df = computePos(node_df, edge_df)
+    st.write("drawPlot3: ", node_df)
+
+    xscale = alt.Scale(domain=[0.,xmax])
 
     # Create and draw edges as a series of horizontal and vertical lines
     df_step = createStepLines(node_df, edge_df)
-    layers = drawStepEdges(df_step)
+    st.write("df_step: ", df_step)
+
+    layers = drawStepEdges(df_step, scale=xscale)
 
     # Set up tooltips searching via mouse movement
     node_nearest = alt.selection(type='single', nearest=True, on='mouseover',
@@ -525,14 +558,14 @@ def drawPlot3(node_df, edge_df, which_tooltip):
     )
 
     nodes = alt.Chart(node_df).mark_rect(
-        width=50,
+        width=20,
         height=20,
         opacity=1.0,
         color='yellow',
         align = 'center',
     ).encode(
         # Set x axis limits to [0,1]
-        x = alt.X('x:Q', scale=alt.Scale(domain=[0.,1.])),
+        x = alt.X('x:Q', scale=xscale, grid=True),
         y = 'y:Q',
         # color = 'arr_delay', # not drawn if NaN
     )
@@ -541,18 +574,20 @@ def drawPlot3(node_df, edge_df, which_tooltip):
         size=500,
         opacity=0.0,
     ).encode(
-        x = 'x:Q',
+        #x = 'x:Q',
+        x = alt.X('x:Q', scale=xscale, grid=True),
         y = 'y:Q',
         tooltip=['id','arr_delay','dep_delay','od','x','y']
     )
 
     node_text = alt.Chart(node_df).mark_text(
         opacity = 1.,
-        color = 'black',
+        color = 'gray',
         align='center',
         baseline='middle'
     ).encode(
-        x = 'x:Q',
+        #x = 'x:Q',
+        x = alt.X('x:Q', scale=xscale, grid=True),
         y = 'y:Q',
         text='od',
         size=alt.value(10)
@@ -564,7 +599,8 @@ def drawPlot3(node_df, edge_df, which_tooltip):
         strokeOpacity=.1,
         stroke='yellow',
     ).encode(
-        x = 'x:Q',
+        #x = 'x:Q',
+        x = alt.X('x:Q', scale=xscale, grid=True),
         y = 'y:Q',
         x2 = 'x2:Q',
         y2 = 'y2:Q',
@@ -582,7 +618,8 @@ def drawPlot3(node_df, edge_df, which_tooltip):
     )
 
     mid_edges = alt.Chart(edge_df).mark_circle(color='yellow', size=50, opacity=0.1).encode(
-        x = 'mid_x:Q',
+        #x = 'mid_x:Q',
+        x = alt.X('mid_x:Q', scale=xscale, grid=True),
         y = 'mid_y:Q',
         tooltip= ['avail','planned','delta','pax']
     ).transform_lookup(
@@ -617,7 +654,7 @@ def drawPlot3(node_df, edge_df, which_tooltip):
 
     # Chart Configuration
     full_chart = full_chart.configure_axisX(
-        labels=False,
+        labels=True,
     )
 
     return full_chart
@@ -721,6 +758,5 @@ def computePos(node_df, edge_df):
     node_df = node_df.reset_index()
     #st.write("nodes with x,y: ", node_df)
     return node_df
-
 
 #----------------------------------------------------------------------

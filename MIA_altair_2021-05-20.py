@@ -89,6 +89,11 @@ init_ix = int(np.where(cities == 'SJO')[0][0])
 
 which_city = st.sidebar.selectbox("Select a City: ", cities, index=init_ix)
 delay = st.sidebar.slider("Keep Connection times less than (min)", 0, 120, 45)
+st.write(cities)
+
+pty_feeders = fsu[fsu['id'].str[10:13] == which_city]['id'].sort_values().to_list()
+#init_fid = pty_feeders[0]
+which_fid = st.sidebar.selectbox("Select a feeder: ", pty_feeders) #, index=init_fid)
 
 size = st.sidebar.slider("Node size: ", 30, 400, 100)
 default_day = '2019/10/01'
@@ -111,6 +116,7 @@ which_tooltip = col1.radio("Tooltips:", ['Node','Edge','Off'], index=2)
 
 keep_early_arr = col1.checkbox("Keep early arrivals", value=False) 
 
+"""
 which_handle = 'handleCityGraph'
 if which_handle == 'handleCity':
     dfs = u.handleCity(
@@ -135,10 +141,13 @@ else:
             is_print=False, 
             delay=delay
     )
+"""
 
 
 # I will need to call handleCityGraph with a specific 'id' (node id)
 flight_id = "2019/10/01SJOPTY18:44796"
+flight_id = which_fid
+flight_id = '2019/10/01MDEPTY10:20532'  # FIGURE OUT coord issue!!
 node_df1, edge_df1 = u.handleCityGraphId(
             flight_id,
             keep_early_arr, 
@@ -150,12 +159,6 @@ node_df1, edge_df1 = u.handleCityGraphId(
             delay=delay
         )
 
-#st.write("node_df: ", node_df)
-#st.write("node_df1: ", node_df1)
-
-#st.write("after call id")
-#st.write(node_df)
-
 # Using nodes 1 (0-indexed) and beyond, determine the next flight leaving the city. 
 # Given an OD: ORIG-DEST, outbound from PTY, figure out the next inbound flight to PTY. 
 # Search the fsu table for DEST_ORIG, and find all flights whose departure time follows the 
@@ -165,18 +168,12 @@ node_df1, edge_df1 = u.handleCityGraphId(
 # Given 2019/10/01PTYBSB20:42205, find the next flights. 
 st.write(id_list.columns)
 idd = id_list[id_list['id_nf'] == '2019/10/01PTYBSB20:42205']
-#st.write("idd= ", idd)
 
 fsuu = fsu[fsu['OD'] == 'BSBPTY'][['id','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']]
-#st.write("fsuu= ", fsuu)
 fsuu = fsu[fsu['OD'] == 'PTYBSB'][['id','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']]
-#st.write("fsuu= ", fsuu)
 
 nodes2 = node_df1.iloc[1:]
-#st.write("nodes2: ", nodes2)
-
 outbound_ids = nodes2['id'].tolist()
-#st.write("nodes2: ", outbound_ids)
 
 if False:
   for id in outbound_ids:
@@ -201,19 +198,51 @@ if False:
 #st.write("fsu4.shape= ", fsu4.shape)
 
 dct = altsup.groupFSUbyTail1(fsu)
-#for k,v in dct.items():
-    #st.write("dct= ", k, v)
-
-#fsu_outbound, fsu_inbound = altsup.misc1(fsu)
-
-#dct, nodct = altsup.computeDict(fsu_outbound, fsu_inbound)
-#st.write("dct1= ", dct)
-
-
 
 # Why is FSU required? 
 # The flight_id_level of the first node to add to the graph
+st.write("First tier, before return flights: node_df1= ", node_df1)
+# some OD's missing. How
 node_df1, edge_df1 = u.getReturnFlights(node_df1, edge_df1, dct, flight_id_level=2)
+st.write("First tier, after return flights: node_df1= ", node_df1)
+
+# Get second tier for flights
+st.write("First tier: node_df1= ", node_df1)
+ids = node_df1[node_df1['lev'] == 2]['id'].to_list()
+st.write(ids)
+
+node_dct = {}
+edge_dct = {}
+
+if False:
+  for fid in ids:
+    st.write("fid: ", fid)
+    try:
+        node_df2, edge_df2 = u.handleCityGraphId(
+            fid,
+            keep_early_arr, 
+            id_list, 
+            fsu, 
+            bookings_f, 
+            feed, 
+            is_print=False, 
+            delay=delay
+        )
+    except:
+        st.write("Error in handleCityGraphId")
+        continue
+
+    node_dct[fid] = node_df2
+    edge_dct[fid] = edge_df2
+
+    st.write("node_df2: ", node_df2)
+    
+    # The first row is the root node. So I can simply append these
+    # to the main node and edge structures
+
+    node_df1 = pd.concat([node_df1,node_df2.iloc[1:]])
+    edge_df1 = pd.concat([edge_df1,edge_df2])
+
 
 #st.write("after getReturnFlights, node_df: ", node_df1)
 
@@ -221,6 +250,8 @@ node_df1, edge_df1 = u.getReturnFlights(node_df1, edge_df1, dct, flight_id_level
 # I would like to connect the outbound city X to the inbounds from city X by a dotted line.
 
 #-----------------------------------------------------
+# SERIOUS BUG: The x/y plots not potting properly. Perhaps there are
+# too many nodes to plot?  This is MDE
 
 node_df = node_df1.copy()
 edge_df = edge_df1.copy()

@@ -2331,6 +2331,7 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
 
         if keep_early_arr == False and inbound_arr_delay < 0:
             st.write("continue")
+            ## Must keep keep_early_arrivals to TRUE for now. 2021-06-07. 
             continue
 
         # just a collection of 'id_nf' ==> nodes
@@ -2497,7 +2498,7 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
 #---------------------------------------------------------
 def getReturnFlights(node_df, edge_df, dct, flight_id_level=0):
     # Scan each outbound flight on the graph and find the corresponding in inbound flight
-    #st.write("enter getReturn, node_df: ", node_df)
+    st.write("enter getReturn")
     outbound_ids = node_df['id'].to_list()[1:]
     #st.write(outbound_ids)
     #st.write("0 node_df: ", node_df)
@@ -2507,6 +2508,7 @@ def getReturnFlights(node_df, edge_df, dct, flight_id_level=0):
         #st.write(outbound, dct[outbound])
         inbounds_df = dct[outbound]
         if inbounds_df.shape[0] > 0:
+            # First departure from city X
             inbound = inbounds_df.iloc[0].id
             # Perhaps add a channel for the line type (dashed or solid)
             # id_f refers to the source of the edge
@@ -2515,17 +2517,27 @@ def getReturnFlights(node_df, edge_df, dct, flight_id_level=0):
             node_df.loc[10000+i,'id'] = inbound
             node_df.loc[10000+i,'lev'] = flight_id_level
             node_df.loc[10000+i,'od'] = inbound[10:16]
+            #st.write("inbound[10:16]= ", inbound[10:16])
             #st.write("xxx: ", node_df)
             edge_df.loc[10000+i,['id_f_y','id_nf_y','id_f_nf']] = [outbound, inbound, np.nan]
             try:
                 # Should find a better way to number the edges
                 # Or somehow use dictionaries
-                inbound = inbounds_df.iloc[1].id
+                # Second departure from city X
+                # There is an exception if there is no second departure
+                # I should check that the second departure is at least 30 min 
+                # after the previous one. Not yet done.
+                inbound = inbounds_df.iloc[1].id  
                 node_df.loc[10000+1000+i,'id'] = inbound
                 node_df.loc[10000+1000+i,'lev'] = flight_id_level
+                node_df.loc[10000+1000+i,'od'] = inbound[10:16]
                 edge_df.loc[10000+1000+i,['id_f_y','id_nf_y','id_f_nf']] = [outbound, inbound, np.nan]
             except:
+                st.write("except..")
                 pass
+
+    st.write("before stop, node_df: ", node_df)
+    #st.stop()
 
     node_df = node_df.reset_index(drop=True)
     edge_df = edge_df.reset_index(drop=True)
