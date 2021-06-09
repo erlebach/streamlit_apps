@@ -10,6 +10,7 @@
 import src.altair_support as altsup
 import networkx as nx
 import sys
+import traceback
 from src.template import *
 sys.path[2] = "."
 
@@ -88,16 +89,14 @@ cities = fsu[fsu['OD'].str[0:3] != 'PTY'].loc[:,'OD'].str[0:3].unique()
 init_ix = int(np.where(cities == 'SJO')[0][0])
 
 which_city = st.sidebar.selectbox("Select a City: ", cities, index=init_ix)
-delay = st.sidebar.slider("Keep Connection times less than (min)", 0, 120, 45)
-st.write(cities)
+delay = st.sidebar.slider("Keep Connection times less than (min)", 0, 120, value=70)
 
-xmax = st.sidebar.slider("Domain size in X", 0, 10, 4)
+xmax = st.sidebar.slider("Domain size in X", 0, 5, 2)
 
 pty_feeders = fsu[fsu['id'].str[10:13] == which_city]['id'].sort_values().to_list()
-#init_fid = pty_feeders[0]
 which_fid = st.sidebar.selectbox("Select a feeder: ", pty_feeders) #, index=init_fid)
 
-rect_color = st.sidebar.selectbox("Node color: ", ['yellow','green','red','blue','darkgray','black'], index=0)
+rect_color = st.sidebar.selectbox("Node color: ", ['yellow','green','red','blue','darkgray','black'], index=3)
 
 text_color = st.sidebar.selectbox("Text color: ", ['yellow','green','red','blue','darkgray','black'], index=0)
 
@@ -120,7 +119,7 @@ if day != default_day:
 
 which_tooltip = col1.radio("Tooltips:", ['Node','Edge','Off'], index=2)
 
-keep_early_arr = col1.checkbox("Keep early arrivals", value=False) 
+keep_early_arr = col1.checkbox("Keep early arrivals", value=True) 
 
 """
 which_handle = 'handleCityGraph'
@@ -241,7 +240,7 @@ node_df1, edge_df1 = u.getReturnFlights(pairs, node_df1, edge_df1, dct, fsu, fli
 # Get second tier for flights
 #st.write("First tier: node_df1= ", node_df1)
 ids = node_df1[node_df1['lev'] == 2]['id'].to_list()
-#st.write(ids)
+st.write("second tier: ", ids)
 
 node_dct = {}
 edge_dct = {}
@@ -250,7 +249,8 @@ edge_dct = {}
 if False:
   for fid in ids:
     st.write("fid: ", fid)
-    try:
+    #try:
+    if 1:
         node_df2, edge_df2 = u.handleCityGraphId(
             fid,
             keep_early_arr, 
@@ -259,12 +259,15 @@ if False:
             bookings_f, 
             feed, 
             is_print=False, 
-            delay=delay
+            delay=delay,
+            flight_id_level=2,
         )
-    except:
-        st.write("Error in handleCityGraphId")
-        continue
+    #except:
+        #st.write("Error in handleCityGraphId")
+        #st.write(traceback.print_exc())
+        #continue
 
+    # Not sure what this is for
     node_dct[fid] = node_df2
     edge_dct[fid] = edge_df2
 
@@ -273,6 +276,7 @@ if False:
     # The first row is the root node. So I can simply append these
     # to the main node and edge structures
 
+    # Inefficient perhaps
     node_df1 = pd.concat([node_df1,node_df2.iloc[1:]])
     edge_df1 = pd.concat([edge_df1,edge_df2])
 

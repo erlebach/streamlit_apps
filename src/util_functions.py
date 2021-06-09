@@ -2358,6 +2358,7 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         #st.write("fsu_outbound= ", fsu_outbound)
 
         fsu_pax = pd.merge(fsu_outbound, feeders_1, how='inner', left_on='id_f_nf', right_on='id_f_nf')
+        st.write("top level: fsu_pax.shape: ", fsu_pax.shape)
         #fsu_outbound.to_csv("outbound_cityGraph.csv", index=0)
         fsu_pax.drop_duplicates(inplace=True)
         #st.write("fsu_pax= ", fsu_pax)
@@ -2384,7 +2385,6 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         # I removed the transpose. Not clear why. 
         #dep_delay = (fsu_inbound.OUT_DTMZ - fsu_inbound.transpose().SCH_DEP_DTMZ) / 1e9 / 60
         dep_delay = (fsu_inbound.OUT_DTMZ - fsu_inbound.SCH_DEP_DTMZ) / 1e9 / 60
-        dep_delay = (fsu_inbound.OUT_DTMZ - fsu_inbound.SCH_DEP_DTMZ) / 1e9 / 60
         arr_delay = (fsu_inbound.IN_DTMZ  - fsu_inbound.SCH_ARR_DTMZ) / 1e9 / 60   # outbound
         dep_delay = dep_delay.values[0]  # Must fix this. Not clear why needed here.
         arr_delay = arr_delay.values[0]
@@ -2392,6 +2392,12 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         od = fsu_inbound.OD.values[0]  # Series
         flt_num = fsu_inbound.FLT_NUM.values[0]
         tail = fsu_inbound.TAIL.values[0]
+        
+        #### IT is zero on second level of inbound flights to PTY. WHY? (2021-06-09)
+        st.write("fsu_pax.shape: ", fsu_pax.shape)
+        if fsu_pax.shape[0] == 0:
+            continue
+
         sch_dep_tmz = fsu_pax.SCH_DEP_TMZ.values[0]
         sch_arr_tmz = fsu_pax.SCH_ARR_TMZ.values[0]
 
@@ -2411,18 +2417,15 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         id_f_nf = id_f + "_" + id_nf
         # Why isn't IN_DTMZ a scalar like in the method handleCitiesGraph()?
         available = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.IN_DTMZ.values[0]) / 1e9 / 60
-        #st.write("ID: available= ", available)
         planned = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.SCH_ARR_DTMZ.values[0]) / 1e9 / 60
-        #st.write("ID: planned= ", planned)
 
-        #available = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().IN_DTMZ) / 1e9 / 60
-        #planned = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().SCH_ARR_DTMZ) / 1e9 / 60
         pax_id_nf = fsu_pax.id_nf_y
         pax_id_f  = fsu_pax.id_f_y
-        #pax_avail = (fsu_pax.SCH_DEP_DTMZ - fsu_inbound.transpose().IN_DTMZ) / 1e9 / 60
-        #pax_planned = (fsu_pax.SCH_DEP_DTMZ - fsu_inbound.transpose().SCH_ARR_DTMZ) / 1e9 / 60
         pax_avail = (fsu_pax.SCH_DEP_DTMZ - fsu_inbound.IN_DTMZ.values[0]) / 1e9 / 60
         pax_planned = (fsu_pax.SCH_DEP_DTMZ - fsu_inbound.SCH_ARR_DTMZ) / 1e9 / 60
+
+        st.write("planned, pax_planned: ", planned, pax_planned)
+        st.write("available, pax_avail: ", available, pax_avail)
         dfx = pd.DataFrame([pax_id_f, pax_id_nf, pax_avail, pax_planned]).transpose()
         #st.write("1 node_df: ", node_df)
 
@@ -2506,7 +2509,7 @@ def getReturnFlights(pairs, node_df, edge_df, dct, fsu, flight_id_level=0):
 
     # outbound from PTY
     for i, outbound in enumerate(outbound_ids): 
-        ids = list(fsu1.index)
+        #ids = list(fsu1.index)
 
         #st.write("corresponding connection (same tail): ")
         city = outbound[13:16]
@@ -2530,14 +2533,33 @@ def getReturnFlights(pairs, node_df, edge_df, dct, fsu, flight_id_level=0):
             # id_f refers to the source of the edge
             # id_nf refers to the target
             # id_f_nf has no meaning in this context
+            rec = fsu1.loc[inbound]
             node_df.loc[10000+i,'id'] = inbound
             node_df.loc[10000+i,'lev'] = flight_id_level
             node_df.loc[10000+i,'od'] = inbound[10:16]
             node_df.loc[10000+i,'FLT_NUM'] = fsu1.loc[inbound].FLT_NUM
             node_df.loc[10000+i,'TAIL'] = fsu1.loc[inbound].TAIL
+            node_df.loc[10000+i,'SCH_DEP_TMZ'] = rec.SCH_DEP_TMZ
+            node_df.loc[10000+i,'SCH_ARR_TMZ'] = rec.SCH_ARR_TMZ
+            node_df.loc[10000+i,'dep_delay'] =  \
+                (rec.OUT_DTMZ - rec.SCH_DEP_DTMZ) / 1e9 / 60
+            node_df.loc[10000+i,'arr_delay'] = \
+                (rec.IN_DTMZ  - rec.SCH_ARR_DTMZ) / 1e9 / 60 
             #st.write("inbound[10:16]= ", inbound[10:16])
             #st.write("xxx: ", node_df)
+
+            st.write(outbound)
+            st.write(inbound)
+            rec_out = fsu1.loc[outbound]
+            rec_in = fsu1.loc[inbound]
+            available = (rec_out.SCH_DEP_DTMZ - rec_in.IN_DTMZ) / 1e9 / 60
+            planned   = (rec_out.SCH_DEP_DTMZ - rec_in.SCH_ARR_DTMZ) / 1e9 / 60
+            delta = planned - available
+
             edge_df.loc[10000+i,['id_f_y','id_nf_y','id_f_nf']] = [outbound, inbound, np.nan]
+            edge_df.loc[10000+i,['planned','delta']] = [planned, delta]
+            edge_df.loc[10000+i,'avail'] = available  # does not work in previous line. WHY NOT? 
+
             continue # skip second flight
             try:
                 # Should find a better way to number the edges
