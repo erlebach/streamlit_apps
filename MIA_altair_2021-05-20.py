@@ -91,9 +91,15 @@ which_city = st.sidebar.selectbox("Select a City: ", cities, index=init_ix)
 delay = st.sidebar.slider("Keep Connection times less than (min)", 0, 120, 45)
 st.write(cities)
 
+xmax = st.sidebar.slider("Domain size in X", 0, 10, 4)
+
 pty_feeders = fsu[fsu['id'].str[10:13] == which_city]['id'].sort_values().to_list()
 #init_fid = pty_feeders[0]
 which_fid = st.sidebar.selectbox("Select a feeder: ", pty_feeders) #, index=init_fid)
+
+rect_color = st.sidebar.selectbox("Node color: ", ['yellow','green','red','blue','darkgray','black'], index=0)
+
+text_color = st.sidebar.selectbox("Text color: ", ['yellow','green','red','blue','darkgray','black'], index=0)
 
 size = st.sidebar.slider("Node size: ", 30, 400, 100)
 default_day = '2019/10/01'
@@ -147,7 +153,7 @@ else:
 # I will need to call handleCityGraph with a specific 'id' (node id)
 flight_id = "2019/10/01SJOPTY18:44796"
 flight_id = which_fid
-flight_id = '2019/10/01MDEPTY10:20532'  # FIGURE OUT coord issue!!
+#flight_id = '2019/10/01MDEPTY10:20532'  # FIGURE OUT coord issue!!
 node_df1, edge_df1 = u.handleCityGraphId(
             flight_id,
             keep_early_arr, 
@@ -166,7 +172,8 @@ node_df1, edge_df1 = u.handleCityGraphId(
 # Flight departs for BSB at 20:42 (18:42 local time), and departs for PTY at 
 
 # Given 2019/10/01PTYBSB20:42205, find the next flights. 
-st.write(id_list.columns)
+#st.write(id_list.columns)
+#st.write(node_df1)
 idd = id_list[id_list['id_nf'] == '2019/10/01PTYBSB20:42205']
 
 fsuu = fsu[fsu['OD'] == 'BSBPTY'][['id','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']]
@@ -197,23 +204,49 @@ if False:
 #st.write("fsu4= ", fsu4['id'])
 #st.write("fsu4.shape= ", fsu4.shape)
 
+# Given a flightId of flight F, return the closest connecting two flights with the departures later than and closest to F's scheduled arrival time. 
 dct = altsup.groupFSUbyTail1(fsu)
+#st.write("dct= ", dct)
+
+#tail_list = altsup.computeFlightPairs(fsu)
+
+def tailDict(fsu):
+    """
+    Return a DataFrame, indexed by incoming flight id. 
+    The incoming ID can be that of an inbound or outbound flight to PTY 
+    """
+    fsu = fsu.sort_values(['TAIL','SCH_DEP_TMZ'])
+    st.write(fsu[['TAIL','SCH_DEP_TMZ']])
+    fsu1 = fsu.shift(periods=-1)
+    flight_pairs = pd.DataFrame({'id1':fsu['id'], 'id2':fsu1['id'],
+        'od1':fsu['OD'], 'od2':fsu1['OD'],
+        'tail1':fsu['TAIL'], 'tail2':fsu1['TAIL'],
+        'dep1':fsu['SCH_DEP_TMZ'], 'arr1':fsu['SCH_ARR_TMZ'],
+        'dep2':fsu1['SCH_DEP_TMZ'], 'arr2':fsu1['SCH_ARR_TMZ']})
+    flight_pairs = flight_pairs[flight_pairs['tail1'] == flight_pairs['tail2']]
+    return flight_pairs.set_index('id1', drop=False)
+
+pairs = tailDict(fsu)
+st.write(pairs)
+
+
 
 # Why is FSU required? 
 # The flight_id_level of the first node to add to the graph
-st.write("First tier, before return flights: node_df1= ", node_df1)
+#st.write("First tier, before return flights: node_df1= ", node_df1)
 # some OD's missing. How
-node_df1, edge_df1 = u.getReturnFlights(node_df1, edge_df1, dct, flight_id_level=2)
-st.write("First tier, after return flights: node_df1= ", node_df1)
+node_df1, edge_df1 = u.getReturnFlights(pairs, node_df1, edge_df1, dct, fsu, flight_id_level=2)
+#st.write("First tier, after return flights: node_df1= ", node_df1)
 
 # Get second tier for flights
-st.write("First tier: node_df1= ", node_df1)
+#st.write("First tier: node_df1= ", node_df1)
 ids = node_df1[node_df1['lev'] == 2]['id'].to_list()
-st.write(ids)
+#st.write(ids)
 
 node_dct = {}
 edge_dct = {}
 
+# Next level of flights
 if False:
   for fid in ids:
     st.write("fid: ", fid)
@@ -262,7 +295,7 @@ if edge_df.shape[0] == 0:
 else:
     # drawPlot2: edges are still oblique
     # drawPlot3: edges are step functions, horizontal/vertical
-    chart3 = altsup.drawPlot3(node_df, edge_df, which_tooltip)
+    chart3 = altsup.drawPlot3(node_df, edge_df, which_tooltip, xmax, rect_color, text_color)
     col2.altair_chart(chart3, use_container_width=True)
 
 st.stop()

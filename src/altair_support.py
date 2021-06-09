@@ -47,9 +47,11 @@ def createStepLines(node_df, edge_df, edge_labels=('id_f_y','id_nf_y')):
         #st.write("createStepLines: node_df: ", node_df)
         e1 = edge_df[edge_labels[0]]
         e2 = edge_df[edge_labels[1]]
+        #st.write("edge_df= ", edge_df, edge_df.shape)
         #st.write("e1= ", e1, e1.shape)
         #st.write("e2= ", e2, e2.shape)
-        st.write("node_df= ", node_df)
+        #st.write("step: node_df, lev=1 ", node_df[node_df['lev']==1])
+        #st.write("step: node_df, lev=2 ", node_df[node_df['lev']==2])
 
         # x,y of node 1 and 2 of each edge.
         # Construct intermediate points (ids1a and ids1b)
@@ -67,16 +69,19 @@ def createStepLines(node_df, edge_df, edge_labels=('id_f_y','id_nf_y')):
 
         #st.stop()
 
+        ## REASON FOR ERROR: PTY-CUN does not have a return flight to PTY .
+        # There is an error in edge array. There is one too many edges.
+        # Must fix in getReturnFlights
+
 
         ids1a = pd.DataFrame([ids1.x, 0.5*(ids1.y+ids2.y)]).transpose()
         #st.write("ids1a: ", ids1a) # seems correct
         ids1b = pd.DataFrame([ids2.x, 0.5*(ids1.y+ids2.y)]).transpose()
-        #st.write("ids1b: ", ids1b) # seems correct
+        #st.write("ids1b: ", ids1b) # Last element x=0.28 is wrong
  
         df_step = pd.concat([ids1, ids1a, ids1b, ids2], axis=1)
-        #st.write("df_step: ", df_step)
+        #st.write("df_step: ", df_step) # already wrong
         df_step.columns = ['x1','y1','x2','y2','x3','y3','x4','y4']
-        #st.write("df_step: ", df_step)
         #st.stop()
 
         # Now create one line per edge: 
@@ -86,6 +91,7 @@ def createStepLines(node_df, edge_df, edge_labels=('id_f_y','id_nf_y')):
         #  col 4: [y1,y2,y3,y4].row2
         df_step_x = df_step[['x1','x2','x3','x4']].transpose()
         df_step_y = df_step[['y1','y2','y3','y4']].transpose()
+        #st.write("df_step_x= ", df_step_x) # already x19 is wrong
 
         # relabel the columns of df_step_x as 'x0', 'x1', ..., 'x15'
         # relabel the columns of df_step_y as 'y0', 'y1', ..., 'y15'
@@ -94,6 +100,8 @@ def createStepLines(node_df, edge_df, edge_labels=('id_f_y','id_nf_y')):
 
         df_step_x = df_step_x.reset_index(drop=True)
         df_step_y = df_step_y.reset_index(drop=True)
+        #st.write("2 df_step_x= ", df_step_x)
+        #st.write("df_step: ", df_step)
 
         df_step = pd.concat([df_step_x, df_step_y], axis=1)
 
@@ -259,6 +267,44 @@ def groupFSUbyTail(fsu0):
 # Tracking by tail works most of the time, but not all the time. 
 # I need a better algorithm to find connections at outside cities (non-PTY)
 
+def computeFlightPairs(fsu):
+    fsu1 = fsu.shift(periods=-1)
+    #st.write(fsu.shape, fsu1.shape)
+    #st.write("fsu: ", fsu[cols].head())
+    #st.write("fsu1: ", fsu1[cols].head())
+
+    flight_pairs = pd.DataFrame({'id1':fsu['id'], 'id2':fsu1['id'],
+        'od1':fsu['OD'], 'od2':fsu1['OD'],
+        'tail1':fsu['TAIL'], 'tail2':fsu1['TAIL'],
+        'dep1':fsu['SCH_DEP_TMZ'], 'arr1':fsu['SCH_ARR_TMZ'],
+        'dep2':fsu1['SCH_DEP_TMZ'], 'arr2':fsu1['SCH_ARR_TMZ']})
+    flight_pairs = flight_pairs[flight_pairs['tail1'] == flight_pairs['tail2']]
+    bad_flight_pairs = flight_pairs[flight_pairs['od1'].str[3:6] != flight_pairs['od2'].str[0:3]]
+    #st.write("flight_pairs: ", flight_pairs)
+    #st.write("bad_pairs: ", bad_flight_pairs)
+
+    # Apparently, 
+    # Tail HP1722 was transferred from SJO to TGU on 2019/10/01
+    # Tail HP1829: not clear. But something happened on 2019/10/01
+    # Tail HP1857 was transferred from TGU to SJO on 2019/10/01
+    tail1722 = fsu[fsu['TAIL'] == 'HP1722']
+    tail1829 = fsu[fsu['TAIL'] == 'HP1829']
+    tail1857 = fsu[fsu['TAIL'] == 'HP1857']
+
+    #st.write("tail1722: ", tail1722[cols])
+    #st.write("tail1829: ", tail1829[cols])
+    #st.write("tail1857: ", tail1857[cols])
+
+    # A flight arrives at SJO at 14:16 pm (Zulu), HP1722. 
+    # Two different nearest flights depart SJO at 14:25 and 17:28. 
+    # They are different tails. So their departures can only be affected
+    # by incoming pax. 
+    fsu_sjo = fsu[fsu['OD'] == 'SJOPTY']
+    #st.write("fsu_sjo: ", fsu_sjo[cols].sort_values('SCH_DEP_TMZ'))
+    return flight_pairs, bad_flight_pairs
+
+#-------------------------------------------------------------
+
 def groupFSUbyTail1(fsu0):
     # Here is a better approach to identifying flight connections in outside cities. 
     fsu = fsu0.copy()
@@ -292,44 +338,8 @@ def groupFSUbyTail1(fsu0):
     #analyzeTailCount(fsu, cols)
 
     #-------------------------------------------
-    def computeFlightPairs(fsu):
-        fsu1 = fsu.shift(periods=-1)
-        #st.write(fsu.shape, fsu1.shape)
-        #st.write("fsu: ", fsu[cols].head())
-        #st.write("fsu1: ", fsu1[cols].head())
-    
-        flight_pairs = pd.DataFrame({'id1':fsu['id'], 'id2':fsu1['id'],
-            'od1':fsu['OD'], 'od2':fsu1['OD'],
-            'tail1':fsu['TAIL'], 'tail2':fsu1['TAIL'],
-            'dep1':fsu['SCH_DEP_TMZ'], 'arr1':fsu['SCH_ARR_TMZ'],
-            'dep2':fsu1['SCH_DEP_TMZ'], 'arr2':fsu1['SCH_ARR_TMZ']})
-        flight_pairs = flight_pairs[flight_pairs['tail1'] == flight_pairs['tail2']]
-        bad_flight_pairs = flight_pairs[flight_pairs['od1'].str[3:6] != flight_pairs['od2'].str[0:3]]
-        #st.write("flight_pairs: ", flight_pairs)
-        #st.write("bad_pairs: ", bad_flight_pairs)
-    
-        # Apparently, 
-        # Tail HP1722 was transferred from SJO to TGU on 2019/10/01
-        # Tail HP1829: not clear. But something happened on 2019/10/01
-        # Tail HP1857 was transferred from TGU to SJO on 2019/10/01
-        tail1722 = fsu[fsu['TAIL'] == 'HP1722']
-        tail1829 = fsu[fsu['TAIL'] == 'HP1829']
-        tail1857 = fsu[fsu['TAIL'] == 'HP1857']
-
-        #st.write("tail1722: ", tail1722[cols])
-        #st.write("tail1829: ", tail1829[cols])
-        #st.write("tail1857: ", tail1857[cols])
-
-        # A flight arrives at SJO at 14:16 pm (Zulu), HP1722. 
-        # Two different nearest flights depart SJO at 14:25 and 17:28. 
-        # They are different tails. So their departures can only be affected
-        # by incoming pax. 
-        fsu_sjo = fsu[fsu['OD'] == 'SJOPTY']
-        #st.write("fsu_sjo: ", fsu_sjo[cols].sort_values('SCH_DEP_TMZ'))
-        return flight_pairs, bad_flight_pairs
 
     flight_pairs, bad_pairs = computeFlightPairs(fsu)
-
 
     #-------------------------
     def getInbounds(df, flight_id):
@@ -521,24 +531,39 @@ st.markdown('<style>#vg-tooltip-element{z-index: 1000051}</style>',
              unsafe_allow_html=True)
 
 #-------------------------------------------------------------
-def drawPlot3(node_df, edge_df, which_tooltip):
+def drawPlot3(node_df, edge_df, which_tooltip, xmax, rect_color, text_color):
     nb_nodes = node_df.shape[0]
     nb_edges = edge_df.shape[0]
 
-    xmax = 10.
-    st.write("************ xmax= ", xmax, "*******************")
+    # CUNPTY, id: 2019/10/01/CUNPTY12:50354 appears twice! HOW!
+    # I must make sure the tails match
+
+    #xmax = 4.
+    #st.write("************ xmax= ", xmax, "*******************")
+    #st.write("drawPlot3, node_df: ", node_df)
+    #st.write("drawPlot3, edge_df: ", edge_df)
 
     # Is there a faster method? Do not add the duplicates in the first place. 
-    node_df = node_df.drop_duplicates(keep='first')
+    #node_df = node_df.drop_duplicates(keep='first')
+    ### CUNPTY duplicate removed
+    #st.write("drawPlot3, --- drop dups, node_df: ", node_df)
 
     node_df = computePos(node_df, edge_df)
-    st.write("drawPlot3: ", node_df)
+
+
+    #st.write("drawPlot3: ", node_df)
+    #st.stop()
 
     xscale = alt.Scale(domain=[0.,xmax])
 
     # Create and draw edges as a series of horizontal and vertical lines
     df_step = createStepLines(node_df, edge_df)
-    st.write("df_step: ", df_step)
+    #st.write("df_step: ", df_step)
+
+    # SAVE TO FILE
+    node_df.to_csv("node_df.csv", index=0)
+    edge_df.to_csv("edge_df.csv", index=0)
+    df_step.to_csv("df_step", index=0)
 
     layers = drawStepEdges(df_step, scale=xscale)
 
@@ -561,11 +586,11 @@ def drawPlot3(node_df, edge_df, which_tooltip):
         width=20,
         height=20,
         opacity=1.0,
-        color='yellow',
-        align = 'center',
+        color=rect_color,
+        align='center',
     ).encode(
         # Set x axis limits to [0,1]
-        x = alt.X('x:Q', scale=xscale, grid=True),
+        x = alt.X('x:Q', scale=xscale),
         y = 'y:Q',
         # color = 'arr_delay', # not drawn if NaN
     )
@@ -575,19 +600,19 @@ def drawPlot3(node_df, edge_df, which_tooltip):
         opacity=0.0,
     ).encode(
         #x = 'x:Q',
-        x = alt.X('x:Q', scale=xscale, grid=True),
+        x = alt.X('x:Q', scale=xscale),
         y = 'y:Q',
-        tooltip=['id','arr_delay','dep_delay','od','x','y']
+        tooltip=['id','SCH_DEP_TMZ','SCH_ARR_TMZ','arr_delay','dep_delay','od','FLT_NUM','TAIL','x','y']
     )
 
     node_text = alt.Chart(node_df).mark_text(
-        opacity = 1.,
-        color = 'gray',
+        opacity=1.,
+        color=text_color,
         align='center',
         baseline='middle'
     ).encode(
         #x = 'x:Q',
-        x = alt.X('x:Q', scale=xscale, grid=True),
+        x = alt.X('x:Q', scale=xscale),
         y = 'y:Q',
         text='od',
         size=alt.value(10)
@@ -600,7 +625,7 @@ def drawPlot3(node_df, edge_df, which_tooltip):
         stroke='yellow',
     ).encode(
         #x = 'x:Q',
-        x = alt.X('x:Q', scale=xscale, grid=True),
+        x = alt.X('x:Q', scale=xscale),
         y = 'y:Q',
         x2 = 'x2:Q',
         y2 = 'y2:Q',
@@ -619,7 +644,7 @@ def drawPlot3(node_df, edge_df, which_tooltip):
 
     mid_edges = alt.Chart(edge_df).mark_circle(color='yellow', size=50, opacity=0.1).encode(
         #x = 'mid_x:Q',
-        x = alt.X('mid_x:Q', scale=xscale, grid=True),
+        x = alt.X('mid_x:Q', scale=xscale),
         y = 'mid_y:Q',
         tooltip= ['avail','planned','delta','pax']
     ).transform_lookup(
@@ -650,6 +675,8 @@ def drawPlot3(node_df, edge_df, which_tooltip):
         #col1.write("no tooltips")
         pass
 
+    #full_chart = (layers + nodes) # + node_text + node_tooltips + mid_edges)
+    #full_chart = (layers + node_text) # + edges + nodes + node_text + node_tooltips + mid_edges)
     full_chart = (layers + edges + nodes + node_text + node_tooltips + mid_edges)
 
     # Chart Configuration
@@ -760,3 +787,151 @@ def computePos(node_df, edge_df):
     return node_df
 
 #----------------------------------------------------------------------
+def drawPlotMWE(which_tooltip):
+    # READ FROM FILE
+    node_df = pd.read_csv("node_df.csv")
+    edge_df = pd.read_csv("edge_df.csv")
+    df_step = pd.read_csv("df_step.csv")
+
+    nb_nodes = node_df.shape[0]
+    nb_edges = edge_df.shape[0]
+
+    xmax = 10.
+    #st.write("************ xmax= ", xmax, "*******************")
+
+    # Is there a faster method? Do not add the duplicates in the first place. 
+    node_df = node_df.drop_duplicates(keep='first')
+
+    node_df = computePos(node_df, edge_df)
+
+    node_df.to_csv("node_pos_df.csv", node_df)
+    edge_df.to_csv("edge_pos_df.csv", edge_df)
+
+    #st.write("drawPlot3: ", node_df)
+
+    xscale = alt.Scale(domain=[0.,xmax])
+
+    # Create and draw edges as a series of horizontal and vertical lines
+    #df_step = createStepLines(node_df, edge_df)  # Read from file for MWE
+    #st.write("df_step: ", df_step)
+
+    layers = drawStepEdges(df_step, scale=xscale)
+
+    # Set up tooltips searching via mouse movement
+    node_nearest = alt.selection(type='single', nearest=True, on='mouseover',
+                        fields=['x','y'], empty='none')
+
+    edge_nearest = alt.selection(type='single', nearest=True, on='mouseover',
+                        fields=['x_mid','y_mid'], empty='none')
+
+    lookup_data = alt.LookupData(
+        node_df, key="id", fields=["x", "y"]
+    )
+
+    lookup_data = alt.LookupData(
+        node_df, key="id", fields=["x", "y"]
+    )
+
+    nodes = alt.Chart(node_df).mark_rect(
+        width=20,
+        height=20,
+        opacity=1.0,
+        color='yellow',
+        align = 'center',
+    ).encode(
+        # Set x axis limits to [0,1]
+        x = alt.X('x:Q', scale=xscale),
+        y = 'y:Q',
+        # color = 'arr_delay', # not drawn if NaN
+    )
+
+    node_tooltips = alt.Chart(node_df).mark_circle(
+        size=500,
+        opacity=0.0,
+    ).encode(
+        #x = 'x:Q',
+        x = alt.X('x:Q', scale=xscale),
+        y = 'y:Q',
+        tooltip=['id','arr_delay','dep_delay','od','x','y']
+    )
+
+    node_text = alt.Chart(node_df).mark_text(
+        opacity = 1.,
+        color = 'gray',
+        align='center',
+        baseline='middle'
+    ).encode(
+        #x = 'x:Q',
+        x = alt.X('x:Q', scale=xscale),
+        y = 'y:Q',
+        text='od',
+        size=alt.value(10)
+    )
+
+    # Create a data frame with as many columns as there are edges. 
+    # Each column is four points. 
+    edges = alt.Chart(edge_df).mark_rule(
+        strokeOpacity=.1,
+        stroke='yellow',
+    ).encode(
+        #x = 'x:Q',
+        x = alt.X('x:Q', scale=xscale),
+        y = 'y:Q',
+        x2 = 'x2:Q',
+        y2 = 'y2:Q',
+        stroke = 'pax:Q',
+        strokeWidth = 'pax:Q' #'scaled_pax:Q'
+    ).transform_lookup(
+        # extract all flights with 'origin' from airports (state, lat, long)
+        lookup='id_f_y',   # needed to draw the line. 'origin' is in flights_airport.csv
+        from_=lookup_data
+    ).transform_lookup(
+        # extract all flights with 'destination' from airports (state, lat, long) renamed (state, lat2, long2)
+        lookup='id_nf_y',
+        from_=lookup_data,
+        as_=['x2', 'y2']
+    )
+
+    mid_edges = alt.Chart(edge_df).mark_circle(color='yellow', size=50, opacity=0.1).encode(
+        #x = 'mid_x:Q',
+        x = alt.X('mid_x:Q', scale=xscale),
+        y = 'mid_y:Q',
+        tooltip= ['avail','planned','delta','pax']
+    ).transform_lookup(
+        # extract all flights with 'origin' from airports (state, lat, long)
+        lookup='id_f_y',   # needed to draw the line. 'origin' is in flights_airport.csv
+        from_=lookup_data
+    ).transform_lookup(
+        # extract all flights with 'destination' from airports (state, lat, long) renamed (state, lat2, long2)
+        lookup='id_nf_y',
+        from_=lookup_data,
+        as_=['x2', 'y2']
+    ).transform_calculate(
+        mid_x = '0.5*(datum.x2 + datum.x)',
+        mid_y = '0.5*(datum.y2 + datum.y)'
+    )
+
+    if which_tooltip == 'Edge':
+        #col1.write("add edge tip")
+        mid_edges = mid_edges.add_selection(
+            edge_nearest
+        )
+    elif which_tooltip == 'Node':
+        #col1.write("add node tip")
+        node_tooltips = node_tooltips.add_selection(
+            node_nearest
+        )
+    elif which_tooltip == 'Off':
+        #col1.write("no tooltips")
+        pass
+
+    full_chart = (layers + edges + nodes + node_text + node_tooltips + mid_edges)
+
+    # Chart Configuration
+    full_chart = full_chart.configure_axisX(
+        labels=True,
+    )
+
+    return full_chart
+
+#----------------------------------------------------------------
