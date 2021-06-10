@@ -45,10 +45,10 @@ id_list = pd.read_csv("my_data/id_list_date.csv.gz")
 
 booking_ids = bookings_f['id_f'].to_frame()
 feeder_ids = feeders['id_f'].to_frame()
-st.write(booking_ids.sort_values('id_f'))
-st.write(feeder_ids.sort_values('id_f'))
+#st.write(booking_ids.sort_values('id_f'))
+#st.write(feeder_ids.sort_values('id_f'))
 mg = pd.merge(booking_ids, feeder_ids, how='inner')
-st.write("mg.shape= ", mg.shape)
+#st.write("mg.shape= ", mg.shape)
 
 #col1.write("---")
 # control color via CSS
@@ -105,7 +105,9 @@ which_city = st.sidebar.selectbox("Select a City: ", cities, index=init_ix)
 delay = st.sidebar.slider("Keep Connection times less than (min)", 0, 120, value=70)
 
 xmax = st.sidebar.slider("Domain size in X", 0, 15, 2)
+ymax = st.sidebar.slider("Domain size in Y", 0, 2, 1)
 dx = st.sidebar.slider("Delta(x)", 0.1, 1., .1)
+dy = st.sidebar.slider("Delta(y)", 0.1, 1., .2)
 
 pty_feeders = fsu[fsu['id'].str[10:13] == which_city]['id'].sort_values().to_list()
 which_fid = st.sidebar.selectbox("Select a feeder: ", pty_feeders) #, index=init_fid)
@@ -135,38 +137,12 @@ which_tooltip = col1.radio("Tooltips:", ['Node','Edge','Off'], index=2)
 
 keep_early_arr = col1.checkbox("Keep early arrivals", value=True) 
 
-"""
-which_handle = 'handleCityGraph'
-if which_handle == 'handleCity':
-    dfs = u.handleCity(
-            which_city, 
-            'all', 
-            id_list, 
-            fsu, 
-            bookings_f, 
-            feed, 
-            is_print=True, 
-            delay=delay
-    )
-else:
-    node_df, edge_df = u.handleCityGraph(
-            keep_early_arr, 
-            which_city, 
-            'all', 
-            id_list, 
-            fsu, 
-            bookings_f, 
-            feed, 
-            is_print=False, 
-            delay=delay
-    )
-"""
 
 # I will need to call handleCityGraph with a specific 'id' (node id)
 flight_id = "2019/10/01SJOPTY18:44796"
 flight_id = which_fid
 #flight_id = '2019/10/01MDEPTY10:20532'  # FIGURE OUT coord issue!!
-node_df1, edge_df1 = u.handleCityGraphId(
+result = u.handleCityGraphId(
             flight_id,
             keep_early_arr, 
             id_list, 
@@ -176,6 +152,11 @@ node_df1, edge_df1 = u.handleCityGraphId(
             is_print=False, 
             delay=delay
         )
+
+if result == None:
+    st.write("Nothing to show")
+else:
+    node_df1, edge_df1 = result
 
 # Using nodes 1 (0-indexed) and beyond, determine the next flight leaving the city. 
 # Given an OD: ORIG-DEST, outbound from PTY, figure out the next inbound flight to PTY. 
@@ -225,7 +206,7 @@ def tailDict(fsu):
     The incoming ID can be that of an inbound or outbound flight to PTY 
     """
     fsu = fsu.sort_values(['TAIL','SCH_DEP_TMZ'])
-    st.write(fsu[['TAIL','SCH_DEP_TMZ']])
+    #st.write(fsu[['TAIL','SCH_DEP_TMZ']])
     fsu1 = fsu.shift(periods=-1)
     flight_pairs = pd.DataFrame({'id1':fsu['id'], 'id2':fsu1['id'],
         'od1':fsu['OD'], 'od2':fsu1['OD'],
@@ -236,7 +217,7 @@ def tailDict(fsu):
     return flight_pairs.set_index('id1', drop=False)
 
 pairs = tailDict(fsu)
-st.write(pairs)
+#st.write(pairs)
 
 
 
@@ -250,9 +231,9 @@ node_df1, edge_df1 = u.getReturnFlights(pairs, node_df1, edge_df1, dct, fsu, fli
 nodes2 = node_df1.iloc[1:]
 outbound_ids = nodes2['id'].tolist()
 nodes_lev2 = node_df1[node_df1['lev'] == 2]
-st.write(node_df1)
-st.write("nodes_lev2")
-st.write(nodes_lev2)
+#st.write(node_df1)
+#st.write("nodes_lev2")
+#st.write(nodes_lev2)
 #st.stop()
 
 # lev 2 are inbounds to PTY
@@ -268,7 +249,7 @@ def outboundsSameTail(fid_list):
     new_outbounds = []
     for fid in fid_list:
         try: 
-            st.write("fid: ", fid)
+            #st.write("fid: ", fid)
             ff = pairs1.loc[fid]['id2']
             #st.write("ff= ", ff)
             #st.write("pairs1.loc[fid]: ", pairs1.loc[fid])
@@ -277,15 +258,15 @@ def outboundsSameTail(fid_list):
     return new_outbounds
 
 ### I would like to start from level 1 tails and track them to the end of the day. 
-st.write("**** setup of fid_list ****")
+#st.write("**** setup of fid_list ****")
 fid_list = node_df1[node_df1['lev'] == 1]['id'].values
-st.write("fid_list= ", fid_list)
+#st.write("fid_list= ", fid_list)
 new_outbounds = outboundsSameTail(fid_list)
-st.write("New outbounds: ", new_outbounds)
+#st.write("New outbounds: ", new_outbounds)
 new_new_outbounds = outboundsSameTail(new_outbounds)
-st.write("New new outbounds: ", new_new_outbounds)
+#st.write("New new outbounds: ", new_new_outbounds)
 new_new_new_outbounds = outboundsSameTail(new_new_outbounds)
-st.write("New new new outbounds: ", new_new_new_outbounds)
+#st.write("New new new outbounds: ", new_new_new_outbounds)
 
 # Given a list of inbound flights into PTY, produce a list of outbound flights
 inbounds = node_df1.groupby('lev').get_group(1)
@@ -306,33 +287,33 @@ node_dct = {}
 edge_dct = {}
 
 ids = node_df1.groupby('lev').get_group(2)['id'].to_list()
-st.write("ids for call to hand*Id*lev2", ids)
+#st.write("ids for call to hand*Id*lev2", ids)
 
 # Next level of flights
 st.write("=== Next level of flights ===")
 st.write("ids= ", ids)
-st.write("feeders: ", feeders.sort_values('id_f'), feeders.shape)
+#st.write("feeders: ", feeders.sort_values('id_f'), feeders.shape)
 
 if True:
 #if False:
   for fid in ids:
-    st.write("fid: ", fid)
+    #st.write("fid: ", fid)
     # There are entries in bookings_f that are not in feeders!! HOW IS THAT POSSIBLE!
     # Check via merge
     #st.write("bookings_nf: ", bookings_nf.sort_values('id_nf'), bookings_f.shape)
 
     try:
-        # Not found in feeders: fid: 2019/10/01PUJPTY16:23569
+        # Not found in feeders: fid: 2019/10/01PUJPTY16:23569 <<< WHY? ****
         #fds = feeders.set_index('id_f',drop=True).loc[fid]
         # Found in bookings: fid: 2019/10/01PUJPTY16:23569
         fds = bookings_f.set_index('id_f',drop=True).loc[fid]
-        st.write("feeders= ", fds)
+        #st.write("feeders= ", fds)
     except:
         st.write("fid not found, except")
         continue
     #try:
     if 1:
-        st.write("enter handl ...Lev2")
+        #st.write("enter handl ...Lev2")
         result = u.handleCityGraphId(
             fid,
             keep_early_arr, 
@@ -359,8 +340,8 @@ if True:
         node_dct[fid] = node_df2
         edge_dct[fid] = edge_df2
 
-        st.write("node_df2: ", node_df2)
-        st.write("edge_df2: ", edge_df2)
+        #st.write("node_df2: ", node_df2)
+        #st.write("edge_df2: ", edge_df2)
     
     # The first row is the root node. So I can simply append these
     # to the main node and edge structures
@@ -397,7 +378,7 @@ if edge_df.shape[0] == 0:
 else:
     # drawPlot2: edges are still oblique
     # drawPlot3: edges are step functions, horizontal/vertical
-    chart3 = altsup.drawPlot3(node_df, edge_df, which_tooltip, xmax, dx, rect_color, text_color)
+    chart3 = altsup.drawPlot3(node_df, edge_df, which_tooltip, xmax, ymax, dx, dy, rect_color, text_color)
     col2.altair_chart(chart3, use_container_width=True)
 
 st.stop()

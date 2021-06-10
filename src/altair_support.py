@@ -128,7 +128,7 @@ def drawStepEdges(df_step, scale):
         layers = alt.layer(
             *[  base.mark_line(
                 color='red',
-                opacity=1.0,
+                opacity=0.5,
                 strokeWidth=2
             ).encode(
                 x=alt.X('x'+str(i), axis=alt.Axis(title="Outbounds"), scale=scale), 
@@ -404,7 +404,7 @@ def groupFSUbyTail1(fsu0):
             pty_inbounds = getInbounds(fsu, outbound_id)
             if pty_inbounds.shape[0] == 0:
                 # One flight has no inbounds on 2019/10/01
-                st.write("<<< outbound_id: ", outbound_id, ",  no inbounds")
+                #st.write("<<< outbound_id: ", outbound_id, ",  no inbounds")
                 continue
             # 1 or 2 next departures
             next_departures = findNextDepartures(f_od, outbound_id, pty_inbounds)
@@ -531,7 +531,7 @@ st.markdown('<style>#vg-tooltip-element{z-index: 1000051}</style>',
              unsafe_allow_html=True)
 
 #-------------------------------------------------------------
-def drawPlot3(node_df, edge_df, which_tooltip, xmax, dx, rect_color, text_color):
+def drawPlot3(node_df, edge_df, which_tooltip, xmax, ymax, dx, dy, rect_color, text_color):
     nb_nodes = node_df.shape[0]
     nb_edges = edge_df.shape[0]
 
@@ -548,13 +548,14 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmax, dx, rect_color, text_color)
     ### CUNPTY duplicate removed
     #st.write("drawPlot3, --- drop dups, node_df: ", node_df)
 
-    node_df = computePos(node_df, edge_df, xmax, dx)
+    node_df = computePos(node_df, edge_df, xmax, ymax, dx, dy)
 
 
     #st.write("drawPlot3: ", node_df)
     #st.stop()
 
     xscale = alt.Scale(domain=[0.,xmax])
+    yscale = alt.Scale(domain=[0.,ymax])
 
     # Create and draw edges as a series of horizontal and vertical lines
     df_step = createStepLines(node_df, edge_df)
@@ -621,16 +622,17 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmax, dx, rect_color, text_color)
     # Create a data frame with as many columns as there are edges. 
     # Each column is four points. 
     edges = alt.Chart(edge_df).mark_rule(
-        strokeOpacity=.1,
+        strokeOpacity=1.0,
         stroke='yellow',
+        strokeWidth=1.,
     ).encode(
         #x = 'x:Q',
         x = alt.X('x:Q', scale=xscale),
         y = 'y:Q',
         x2 = 'x2:Q',
         y2 = 'y2:Q',
-        stroke = 'pax:Q',
-        strokeWidth = 'pax:Q' #'scaled_pax:Q'
+        #stroke = 'pax:Q',
+        #strokeWidth = 'pax:Q' #'scaled_pax:Q'
     ).transform_lookup(
         # extract all flights with 'origin' from airports (state, lat, long)
         lookup='id_f_y',   # needed to draw the line. 'origin' is in flights_airport.csv
@@ -687,32 +689,29 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmax, dx, rect_color, text_color)
     return full_chart
 
 #----------------------------------------------------------------
-def computePos(node_df, edge_df, xmax, dx):
+def computePos(node_df, edge_df, xmax, ymax, dx, dy):
     """ 
     Compute positions of nodes encoded in the dataframe  node_df
     """
     # By convention, the nodes with even levels are feeders (0,2,4)
 
     nb_nodes = node_df.shape[0]
-    #st.write(node_df)
 
     levels = node_df['lev'].value_counts().to_frame()
-    #st.write('lev: ', levels)
-    #xx = xx.reset_index()
 
     # Compute deltax per level
-    print(type(levels))
 
     W = xmax
     deltax = {}
     deltay = {}
-    #st.write("columns: ", levels.columns)
     for lev in range(levels.shape[0]):
         deltax[lev] = W / levels['lev'].values[lev]
         deltay[lev] = 0.3
 
+    # Each parent city should have a different delta y
+    # higher levels should have higher delta y (perhaps logarithmic scaling?)
+    # Draw edge with larger delays in red, or thicker
     node_df['y'] = 0.8 - node_df['lev'] * deltay[0]
-    #node_df['x'] = 
 
     # Compute number of children of each node
     nb_children = defaultdict(int)
@@ -720,7 +719,6 @@ def computePos(node_df, edge_df, xmax, dx):
     # specify the parent, get a list of children
     children = defaultdict(list)
 
-    #st.write(edge_df)
     edge_df = edge_df.reset_index(drop=True)  # To be safe
     for i in range(edge_df.shape[0]):
         src_id = edge_df.loc[i,'id_f_y']
@@ -728,10 +726,6 @@ def computePos(node_df, edge_df, xmax, dx):
         parent[target_id] = src_id
         children[src_id].append(target_id)
         nb_children[src_id] += 1
-
-    #st.write("dct: ", dct)
-    #st.write("**** children: ", children)
-
 
     node_df = node_df.set_index('id')
     ids = list(node_df.index)
@@ -742,16 +736,11 @@ def computePos(node_df, edge_df, xmax, dx):
     # assuming parents are stored in random order, how to fill the x values? 
     # This is where NetworkX would be very useful
     #
-    #node_df = node_df.reset_index()
 
-    #st.write(node_df)
     root_id = node_df.index[0]
     par = root_id
     node_df.loc[par,'x'] = 0.05
     node_df.loc[par,'y'] = 0.8
-    dy = 0.2
-
-    #st.write("node_df: ", node_df)
 
     stack = deque()
     stack.append(par)
@@ -766,170 +755,18 @@ def computePos(node_df, edge_df, xmax, dx):
             break
         v = children[par]
         nb_children = len(v)
-        #st.write("par: ", par, "  children: ", v)
         if nb_children == 1:
-            #st.write("if, nb children = 1")
             node_df.loc[v[0],'x'] = node_df.loc[par,'x']
             node_df.loc[v[0],'y'] = node_df.loc[par,'y'] - dy
             stack.append(v[0])
         elif nb_children > 1:
-            #st.write("else, nb children = ", nb_children)
             for i,c in enumerate(v):
                 node_df.loc[v[i],'y'] = node_df.loc[par,'y'] - dy
-                #st.write("i*dx= ", i*dx, node_df.loc[par,'x'])
                 node_df.loc[v[i],'x'] = node_df.loc[par,'x'] + i*dx
                 stack.append(v[i])
 
     node_df = node_df.reset_index()
-    #st.write("nodes with x,y: ", node_df)
+    st.write("nodes with x,y: ", node_df)
     return node_df
 
 #----------------------------------------------------------------------
-def drawPlotMWE(which_tooltip):
-    # READ FROM FILE
-    node_df = pd.read_csv("node_df.csv")
-    edge_df = pd.read_csv("edge_df.csv")
-    df_step = pd.read_csv("df_step.csv")
-
-    nb_nodes = node_df.shape[0]
-    nb_edges = edge_df.shape[0]
-
-    xmax = 10.
-    #st.write("************ xmax= ", xmax, "*******************")
-
-    # Is there a faster method? Do not add the duplicates in the first place. 
-    node_df = node_df.drop_duplicates(keep='first')
-
-    node_df = computePos(node_df, edge_df)
-
-    node_df.to_csv("node_pos_df.csv", node_df)
-    edge_df.to_csv("edge_pos_df.csv", edge_df)
-
-    #st.write("drawPlot3: ", node_df)
-
-    xscale = alt.Scale(domain=[0.,xmax])
-
-    # Create and draw edges as a series of horizontal and vertical lines
-    #df_step = createStepLines(node_df, edge_df)  # Read from file for MWE
-    #st.write("df_step: ", df_step)
-
-    layers = drawStepEdges(df_step, scale=xscale)
-
-    # Set up tooltips searching via mouse movement
-    node_nearest = alt.selection(type='single', nearest=True, on='mouseover',
-                        fields=['x','y'], empty='none')
-
-    edge_nearest = alt.selection(type='single', nearest=True, on='mouseover',
-                        fields=['x_mid','y_mid'], empty='none')
-
-    lookup_data = alt.LookupData(
-        node_df, key="id", fields=["x", "y"]
-    )
-
-    lookup_data = alt.LookupData(
-        node_df, key="id", fields=["x", "y"]
-    )
-
-    nodes = alt.Chart(node_df).mark_rect(
-        width=20,
-        height=20,
-        opacity=1.0,
-        color='yellow',
-        align = 'center',
-    ).encode(
-        # Set x axis limits to [0,1]
-        x = alt.X('x:Q', scale=xscale),
-        y = 'y:Q',
-        # color = 'arr_delay', # not drawn if NaN
-    )
-
-    node_tooltips = alt.Chart(node_df).mark_circle(
-        size=500,
-        opacity=0.0,
-    ).encode(
-        #x = 'x:Q',
-        x = alt.X('x:Q', scale=xscale),
-        y = 'y:Q',
-        tooltip=['id','arr_delay','dep_delay','od','x','y']
-    )
-
-    node_text = alt.Chart(node_df).mark_text(
-        opacity = 1.,
-        color = 'gray',
-        align='center',
-        baseline='middle'
-    ).encode(
-        #x = 'x:Q',
-        x = alt.X('x:Q', scale=xscale),
-        y = 'y:Q',
-        text='od',
-        size=alt.value(10)
-    )
-
-    # Create a data frame with as many columns as there are edges. 
-    # Each column is four points. 
-    edges = alt.Chart(edge_df).mark_rule(
-        strokeOpacity=.1,
-        stroke='yellow',
-    ).encode(
-        #x = 'x:Q',
-        x = alt.X('x:Q', scale=xscale),
-        y = 'y:Q',
-        x2 = 'x2:Q',
-        y2 = 'y2:Q',
-        stroke = 'pax:Q',
-        strokeWidth = 'pax:Q' #'scaled_pax:Q'
-    ).transform_lookup(
-        # extract all flights with 'origin' from airports (state, lat, long)
-        lookup='id_f_y',   # needed to draw the line. 'origin' is in flights_airport.csv
-        from_=lookup_data
-    ).transform_lookup(
-        # extract all flights with 'destination' from airports (state, lat, long) renamed (state, lat2, long2)
-        lookup='id_nf_y',
-        from_=lookup_data,
-        as_=['x2', 'y2']
-    )
-
-    mid_edges = alt.Chart(edge_df).mark_circle(color='yellow', size=50, opacity=0.1).encode(
-        #x = 'mid_x:Q',
-        x = alt.X('mid_x:Q', scale=xscale),
-        y = 'mid_y:Q',
-        tooltip= ['avail','planned','delta','pax']
-    ).transform_lookup(
-        # extract all flights with 'origin' from airports (state, lat, long)
-        lookup='id_f_y',   # needed to draw the line. 'origin' is in flights_airport.csv
-        from_=lookup_data
-    ).transform_lookup(
-        # extract all flights with 'destination' from airports (state, lat, long) renamed (state, lat2, long2)
-        lookup='id_nf_y',
-        from_=lookup_data,
-        as_=['x2', 'y2']
-    ).transform_calculate(
-        mid_x = '0.5*(datum.x2 + datum.x)',
-        mid_y = '0.5*(datum.y2 + datum.y)'
-    )
-
-    if which_tooltip == 'Edge':
-        #col1.write("add edge tip")
-        mid_edges = mid_edges.add_selection(
-            edge_nearest
-        )
-    elif which_tooltip == 'Node':
-        #col1.write("add node tip")
-        node_tooltips = node_tooltips.add_selection(
-            node_nearest
-        )
-    elif which_tooltip == 'Off':
-        #col1.write("no tooltips")
-        pass
-
-    full_chart = (layers + edges + nodes + node_text + node_tooltips + mid_edges)
-
-    # Chart Configuration
-    full_chart = full_chart.configure_axisX(
-        labels=True,
-    )
-
-    return full_chart
-
-#----------------------------------------------------------------

@@ -2014,8 +2014,8 @@ def handleCity(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print=True
 
         outbounds = findOutboundIds(id_list, inbound).to_frame()
         outbounds['id_f'] = inbound
-        st.write("outbounds")
-        st.write(outbounds)
+        #st.write("outbounds")
+        #st.write(outbounds)
 
         #st.write("feeders: ", feeders.shape)  # <<<< THE DIFFERENCE
         #print("feeders: ", feeders.shape)
@@ -2030,15 +2030,15 @@ def handleCity(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print=True
         fsu_outbound = pd.merge(fsu, outbounds, how='inner', left_on='id', right_on='id_nf')
         fsu_outbound['id_f_nf'] = fsu_outbound['id_f'] + fsu_outbound['id_nf']
 
-        st.write("fsu_outbound: ", fsu_outbound.shape)
-        st.write("feeders_1: ", feeders_1.shape)
+        #st.write("fsu_outbound: ", fsu_outbound.shape)
+        #st.write("feeders_1: ", feeders_1.shape)
         fsu_outbound.to_csv("outbound_city.csv", index=0)
         feeders_1.to_csv("feeders_1_city.csv", index=0)
 
         fsu_pax = pd.merge(fsu_outbound, feeders_1, how='inner', left_on='id_f_nf', right_on='id_f_nf')
-        st.write("fsu_pax.shape: ", fsu_pax.shape)
-        st.write("fsu_outbound.head: ", fsu_outbound.head())
-        st.write("feeders_1.head: ", feeders_1.head())
+        #st.write("fsu_pax.shape: ", fsu_pax.shape)
+        #st.write("fsu_outbound.head: ", fsu_outbound.head())
+        #st.write("feeders_1.head: ", feeders_1.head())
         fsu_pax.drop_duplicates(inplace=True)
         #st.write(type(fsu_pax))
 
@@ -2347,7 +2347,7 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         # Create a unique id that combines inbound (feeder) and outbound flights
         # This will allow me to merge two files with feeder/non-feeder columns
         feeders_1 = feeders[feeders['id_f'] == inbound]
-        st.write("handle*Id, feeders_1= ", feeders_1)
+        #st.write("handle*Id, feeders_1= ", feeders_1)
 
         feeders_1['id_f_nf'] = feeders_1['id_f'] + '_' + feeders_1['id_nf']
 
@@ -2358,7 +2358,7 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         #st.write("fsu_outbound= ", fsu_outbound)
 
         fsu_pax = pd.merge(fsu_outbound, feeders_1, how='inner', left_on='id_f_nf', right_on='id_f_nf')
-        st.write("top level: fsu_pax.shape: ", fsu_pax.shape)
+        #st.write("top level: fsu_pax.shape: ", fsu_pax.shape)
         #fsu_outbound.to_csv("outbound_cityGraph.csv", index=0)
         fsu_pax.drop_duplicates(inplace=True)
         #st.write("fsu_pax= ", fsu_pax)
@@ -2394,7 +2394,7 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         tail = fsu_inbound.TAIL.values[0]
         
         #### IT is zero on second level of inbound flights to PTY. WHY? (2021-06-09)
-        st.write("fsu_pax.shape: ", fsu_pax.shape)
+        #st.write("fsu_pax.shape: ", fsu_pax.shape)
         if fsu_pax.shape[0] == 0:
             continue
 
@@ -2402,7 +2402,7 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         sch_arr_tmz = fsu_pax.SCH_ARR_TMZ.values[0]
 
         row_f = {'id':inbound, 'arr_delay':arr_delay, 'dep_delay':dep_delay, 'od':od, 'lev':flight_id_level, 'FLT_NUM':flt_num, 'TAIL':tail, 'SCH_DEP_TMZ':sch_dep_tmz, 'SCH_ARR_TMZ':sch_arr_tmz}
-        st.write(row_f)
+        #st.write(row_f)
 
         d_nf.loc[-1] = row_f
         # drop=True: do not keep the new index column created by default
@@ -2743,7 +2743,7 @@ def getReturnFlights(pairs, node_df, edge_df, dct, fsu, flight_id_level=0):
             # First departure from city X
             #inbound = inbounds_df.iloc[0].id
             inbound = next_fid.id2
-            st.write("inbound= ", inbound)
+            #st.write("inbound= ", inbound)
 
             # Perhaps add a channel for the line type (dashed or solid)
             # id_f refers to the source of the edge
@@ -2853,7 +2853,7 @@ def getReturnFlights(pairs, node_df, edge_df, dct, fsu, flight_id_level=0):
             # First departure from city X
             #inbound = inbounds_df.iloc[0].id
             inbound = next_fid.id2
-            st.write("inbound= ", inbound)
+            #st.write("inbound= ", inbound)
 
             # Perhaps add a channel for the line type (dashed or solid)
             # id_f refers to the source of the edge
