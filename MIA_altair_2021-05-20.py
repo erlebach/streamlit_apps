@@ -37,6 +37,19 @@ feeders = pd.read_csv("my_data/bookings_idlist_pax_date.csv.gz")
 fsu = pd.read_csv("my_data/node_attributes_df.csv.gz")
 id_list = pd.read_csv("my_data/id_list_date.csv.gz")
 
+### TO CHECK: 
+# - all id_f in bookings_f should be contained in feeders
+# - all id_nf in bookings_f should be contained in feeders
+# - all id_f in bookings_nf should be contained in feeders
+# - all id_nf in bookings_nf should be contained in feeders
+
+booking_ids = bookings_f['id_f'].to_frame()
+feeder_ids = feeders['id_f'].to_frame()
+st.write(booking_ids.sort_values('id_f'))
+st.write(feeder_ids.sort_values('id_f'))
+mg = pd.merge(booking_ids, feeder_ids, how='inner')
+st.write("mg.shape= ", mg.shape)
+
 #col1.write("---")
 # control color via CSS
 #col1.write(f"{fsu.shape}, {id_list.shape}, {feeders.shape}, {bookings_nf.shape}, {bookings_f.shape}")
@@ -91,7 +104,8 @@ init_ix = int(np.where(cities == 'SJO')[0][0])
 which_city = st.sidebar.selectbox("Select a City: ", cities, index=init_ix)
 delay = st.sidebar.slider("Keep Connection times less than (min)", 0, 120, value=70)
 
-xmax = st.sidebar.slider("Domain size in X", 0, 5, 2)
+xmax = st.sidebar.slider("Domain size in X", 0, 15, 2)
+dx = st.sidebar.slider("Delta(x)", 0.1, 1., .1)
 
 pty_feeders = fsu[fsu['id'].str[10:13] == which_city]['id'].sort_values().to_list()
 which_fid = st.sidebar.selectbox("Select a feeder: ", pty_feeders) #, index=init_fid)
@@ -148,7 +162,6 @@ else:
     )
 """
 
-
 # I will need to call handleCityGraph with a specific 'id' (node id)
 flight_id = "2019/10/01SJOPTY18:44796"
 flight_id = which_fid
@@ -177,9 +190,6 @@ idd = id_list[id_list['id_nf'] == '2019/10/01PTYBSB20:42205']
 
 fsuu = fsu[fsu['OD'] == 'BSBPTY'][['id','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']]
 fsuu = fsu[fsu['OD'] == 'PTYBSB'][['id','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']]
-
-nodes2 = node_df1.iloc[1:]
-outbound_ids = nodes2['id'].tolist()
 
 if False:
   for id in outbound_ids:
@@ -237,21 +247,93 @@ st.write(pairs)
 node_df1, edge_df1 = u.getReturnFlights(pairs, node_df1, edge_df1, dct, fsu, flight_id_level=2)
 #st.write("First tier, after return flights: node_df1= ", node_df1)
 
+nodes2 = node_df1.iloc[1:]
+outbound_ids = nodes2['id'].tolist()
+nodes_lev2 = node_df1[node_df1['lev'] == 2]
+st.write(node_df1)
+st.write("nodes_lev2")
+st.write(nodes_lev2)
+#st.stop()
+
+# lev 2 are inbounds to PTY
+#st.write("pairs: ", pairs)
+
+pairs1 = pairs.set_index('id1', drop=False)
+pairs2 = pairs.set_index('id2', drop=False)
+
+
+def outboundsSameTail(fid_list):
+    #for fid in node_df1['id'].to_list():
+    #for fid in nodes_lev2['id'].to_list():
+    new_outbounds = []
+    for fid in fid_list:
+        try: 
+            st.write("fid: ", fid)
+            ff = pairs1.loc[fid]['id2']
+            #st.write("ff= ", ff)
+            #st.write("pairs1.loc[fid]: ", pairs1.loc[fid])
+            new_outbounds.append(pairs1.loc[fid,'id2'])
+        except: pass
+    return new_outbounds
+
+### I would like to start from level 1 tails and track them to the end of the day. 
+st.write("**** setup of fid_list ****")
+fid_list = node_df1[node_df1['lev'] == 1]['id'].values
+st.write("fid_list= ", fid_list)
+new_outbounds = outboundsSameTail(fid_list)
+st.write("New outbounds: ", new_outbounds)
+new_new_outbounds = outboundsSameTail(new_outbounds)
+st.write("New new outbounds: ", new_new_outbounds)
+new_new_new_outbounds = outboundsSameTail(new_new_outbounds)
+st.write("New new new outbounds: ", new_new_new_outbounds)
+
+# Given a list of inbound flights into PTY, produce a list of outbound flights
+inbounds = node_df1.groupby('lev').get_group(1)
+
+#outbounds = fsu.set_index('id', drop=True).loc[inbounds.id]
+
+st.write("inbounds lev 0: ", node_df1.groupby('lev').get_group(0))
+st.write("inbounds lev 1: ", inbounds)
+st.write("inbounds lev 2: ", node_df1.groupby('lev').get_group(2))
+
 # Get second tier for flights
 #st.write("First tier: node_df1= ", node_df1)
-ids = node_df1[node_df1['lev'] == 2]['id'].to_list()
-st.write("second tier: ", ids)
+#ids = node_df1[node_df1['lev'] == 2]['id'].to_list()
+
+### ONLY if ids is not empty
 
 node_dct = {}
 edge_dct = {}
 
+ids = node_df1.groupby('lev').get_group(2)['id'].to_list()
+st.write("ids for call to hand*Id*lev2", ids)
+
 # Next level of flights
-if False:
+st.write("=== Next level of flights ===")
+st.write("ids= ", ids)
+st.write("feeders: ", feeders.sort_values('id_f'), feeders.shape)
+
+if True:
+#if False:
   for fid in ids:
     st.write("fid: ", fid)
+    # There are entries in bookings_f that are not in feeders!! HOW IS THAT POSSIBLE!
+    # Check via merge
+    #st.write("bookings_nf: ", bookings_nf.sort_values('id_nf'), bookings_f.shape)
+
+    try:
+        # Not found in feeders: fid: 2019/10/01PUJPTY16:23569
+        #fds = feeders.set_index('id_f',drop=True).loc[fid]
+        # Found in bookings: fid: 2019/10/01PUJPTY16:23569
+        fds = bookings_f.set_index('id_f',drop=True).loc[fid]
+        st.write("feeders= ", fds)
+    except:
+        st.write("fid not found, except")
+        continue
     #try:
     if 1:
-        node_df2, edge_df2 = u.handleCityGraphId(
+        st.write("enter handl ...Lev2")
+        result = u.handleCityGraphId(
             fid,
             keep_early_arr, 
             id_list, 
@@ -262,25 +344,41 @@ if False:
             delay=delay,
             flight_id_level=2,
         )
+
+        if result == None:
+            continue
+        else:
+            node_df2, edge_df2 = result
+            
     #except:
         #st.write("Error in handleCityGraphId")
         #st.write(traceback.print_exc())
         #continue
 
     # Not sure what this is for
-    node_dct[fid] = node_df2
-    edge_dct[fid] = edge_df2
+        node_dct[fid] = node_df2
+        edge_dct[fid] = edge_df2
 
-    st.write("node_df2: ", node_df2)
+        st.write("node_df2: ", node_df2)
+        st.write("edge_df2: ", edge_df2)
     
     # The first row is the root node. So I can simply append these
     # to the main node and edge structures
 
     # Inefficient perhaps
-    node_df1 = pd.concat([node_df1,node_df2.iloc[1:]])
-    edge_df1 = pd.concat([edge_df1,edge_df2])
+        node_df1 = pd.concat([node_df1,node_df2.iloc[1:]])
+        edge_df1 = pd.concat([edge_df1,edge_df2])
 
+st.write("end loop")
+groups = node_df1.groupby('lev')
+for lev in [0,1,2,3]:
+   st.write(f"inbounds lev {lev}: ", groups.get_group(lev))
 
+st.write("node_df1= ", node_df1)
+st.write("edge_df1= ", edge_df1)
+#st.stop()
+
+#st.stop()
 #st.write("after getReturnFlights, node_df: ", node_df1)
 
 # Create a dictionary of node/edge pairs
@@ -299,7 +397,7 @@ if edge_df.shape[0] == 0:
 else:
     # drawPlot2: edges are still oblique
     # drawPlot3: edges are step functions, horizontal/vertical
-    chart3 = altsup.drawPlot3(node_df, edge_df, which_tooltip, xmax, rect_color, text_color)
+    chart3 = altsup.drawPlot3(node_df, edge_df, which_tooltip, xmax, dx, rect_color, text_color)
     col2.altair_chart(chart3, use_container_width=True)
 
 st.stop()

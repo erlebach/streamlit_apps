@@ -531,7 +531,7 @@ st.markdown('<style>#vg-tooltip-element{z-index: 1000051}</style>',
              unsafe_allow_html=True)
 
 #-------------------------------------------------------------
-def drawPlot3(node_df, edge_df, which_tooltip, xmax, rect_color, text_color):
+def drawPlot3(node_df, edge_df, which_tooltip, xmax, dx, rect_color, text_color):
     nb_nodes = node_df.shape[0]
     nb_edges = edge_df.shape[0]
 
@@ -548,7 +548,7 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmax, rect_color, text_color):
     ### CUNPTY duplicate removed
     #st.write("drawPlot3, --- drop dups, node_df: ", node_df)
 
-    node_df = computePos(node_df, edge_df)
+    node_df = computePos(node_df, edge_df, xmax, dx)
 
 
     #st.write("drawPlot3: ", node_df)
@@ -687,7 +687,7 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmax, rect_color, text_color):
     return full_chart
 
 #----------------------------------------------------------------
-def computePos(node_df, edge_df):
+def computePos(node_df, edge_df, xmax, dx):
     """ 
     Compute positions of nodes encoded in the dataframe  node_df
     """
@@ -703,7 +703,7 @@ def computePos(node_df, edge_df):
     # Compute deltax per level
     print(type(levels))
 
-    W = 1
+    W = xmax
     deltax = {}
     deltay = {}
     #st.write("columns: ", levels.columns)
@@ -737,7 +737,6 @@ def computePos(node_df, edge_df):
     ids = list(node_df.index)
 
     #st.write("len(children): ", len(children))
-    dx = .1
 
     # I want to start at the root 
     # assuming parents are stored in random order, how to fill the x values? 
@@ -751,7 +750,6 @@ def computePos(node_df, edge_df):
     node_df.loc[par,'x'] = 0.05
     node_df.loc[par,'y'] = 0.8
     dy = 0.2
-    dx = .23
 
     #st.write("node_df: ", node_df)
 
