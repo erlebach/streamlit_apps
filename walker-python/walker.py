@@ -210,6 +210,7 @@ class Walker:
 
     Returns: None
     """
+
     root = random.choice(self.nodes)
     while root.parent is not None:
       root = root.parent

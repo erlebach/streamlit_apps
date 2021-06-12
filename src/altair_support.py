@@ -2,6 +2,9 @@ from src.template import *
 from collections import defaultdict
 from collections import deque
 import networkx as nx
+from node import Node 
+from walker import Walker
+#from GE_walker import WalkerGE
 
 def allowTooltipsInExpandedWindows():
     # Need a better way to set these. Perhaps in a dictionary set as 
@@ -535,6 +538,14 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmax, ymax, dx, dy, rect_color, t
     nb_nodes = node_df.shape[0]
     nb_edges = edge_df.shape[0]
 
+    # Remove duplicates in nb_nodes: 2019/10/01PTYROS20:16805 is duplicate
+    node_df = node_df.drop_duplicates()
+
+    # THE DUPLICATES MUST BE REMOVED in handle*Id() before edge array is filled
+
+    node_df = node_df.reset_index(drop=True)
+    edge_df = edge_df.reset_index(drop=True)
+
     # CUNPTY, id: 2019/10/01/CUNPTY12:50354 appears twice! HOW!
     # I must make sure the tails match
 
@@ -547,6 +558,161 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmax, ymax, dx, dy, rect_color, t
     #node_df = node_df.drop_duplicates(keep='first')
     ### CUNPTY duplicate removed
     #st.write("drawPlot3, --- drop dups, node_df: ", node_df)
+
+    # transform all ids into integers. Create dictionary str_id ==> int_id
+    # no concern for efficiency since this is for debugging Walker's algorithm
+
+    st.write("node_df: ", node_df)
+    st.write("edge_df: ", edge_df)
+
+    str2id = {}
+    for i in range(node_df.shape[0]):
+        fid = node_df.iloc[i].id
+        str2id[fid] = i
+    fids = list(range(0,node_df.shape[0]))
+    node_df.id = fids
+
+    id_f_y = edge_df['id_f_y'].values
+    id_nf_y = edge_df['id_nf_y'].values
+    for i in range(edge_df.shape[0]):
+        id_f_y[i] = str2id[id_f_y[i]]
+        id_nf_y[i] = str2id[id_nf_y[i]]
+    edge_df.id_f_y = id_f_y
+    edge_df.id_nf_y = id_nf_y
+
+    st.write("node_df: ", node_df)
+    st.write("edge_df: ", edge_df)
+
+    #node_df = node_df[node_df['lev'] < 2] # nodes 0 -> 6 included
+    #node_df = node_df[node_df['lev'] < 3] # nodes 0 -> 11 included
+    st.write(node_df)
+    # keep all levels of nodes, and increase number of edges slowly
+
+    # Streamlit does not update properly when rerun, when changing nb
+    # Bothersome
+    #nb = 12  # 
+    """
+   	8	6.5	320.8
+	9	12.5	320.8
+	10	18.5	320.8
+	11	30.5	320.8
+	12	0.5	480.8
+    """
+    nb = 13  # Looks ok (sometimes), and sometimes I get all zeros. HOW? WhY?
+             # Works when I remove all nodes not used. So the graph is connected. 
+             # I get a "should not happen" in walker.py. 
+             ## DRAW THE NETWORK. WHAT IS WRONG? Perhaps not a tree? 
+             # There is probably an error in handle*Id(), which should be simplified. 
+    """
+    10	18.5	320.8
+	11	30.5	320.8
+	12	0.5	480.8   # level 2
+	13	0	0    # THIS IS AN ERROR
+    """#
+    #nb = 14  # There is an x coordinate of zero for node 13 
+    """
+   	12	0.5	480.8
+	13	0	0
+	14	6.5	480.8
+    """
+
+    # Node 13 does not appear to be in the edge_df. Did I make an error? 
+    # How can node 13 appear if there is no edge? 
+    #xx = edge_df[(edge_df['id_f_y'] == 13) or (edge_df['id_nf_y'] == 13)]
+    xx = edge_df[edge_df['id_f_y'] == 13]
+    st.write("edges with 13 as a node: ", xx)
+    xx = edge_df[edge_df['id_nf_y'] == 13]
+    st.write("edges with 13 as a node: ", xx)
+    # There are no edges with node 13 as a node. This indcates an error. 
+    # I must go back to hande*Id() and find out where I made the mistake. 
+    #st.stop() # <<<<
+
+    node_df = node_df.iloc[0:nb+1]
+    edge_df = edge_df[edge_df['id_f_y'] <= nb]
+    edge_df = edge_df[edge_df['id_nf_y'] <= nb]
+    st.write(".node_df: ", node_df)
+    st.write(".edge_df: ", edge_df)
+    st.write(f'gordon, {nb}')
+
+
+    def transform_for_walker(node_df, edge_df):
+        ids = node_df['id'].tolist()
+        nodes = {}
+
+        w = Walker(debug=True, rootX=0.5, rootY=0.8)
+        w.config['NODE_SIZE'] = 2
+        w.config['NODE_SEPARATION'] = 4
+        w.config['TREE_SEPARATION'] = 4
+
+        for fid in ids:
+            nodes[fid] = Node(ID=fid)
+            w.add_node(nodes[fid])
+
+        #for node in w.nodes:
+            #st.write("Walker node id list: ", node.id)
+
+        #for key, val in nodes.items():
+            #st.write("Walker node id list: ", key, val, val.id)
+            #st.write("++++++")
+
+        st.write(edge_df.columns)
+        src = edge_df['id_f_y']
+        dest = edge_df['id_nf_y']
+        for s, d in zip(src, dest):
+            nodes[d].parent = nodes[s]
+            nodes[s].children.append(nodes[d])
+
+        for node in w.nodes:
+            children = node.children
+            for i in range(len(node.children)):
+                try:
+                    #st.write("i= ", i, "... len(children) 1: ", len(children))
+                    node.children[i].right_sibling = node.children[i+1]
+                    #st.write("try 1")
+                except:
+                    #st.write("except 1")
+                    pass
+                    #st.write("i= ", i, "... len(children) 1: ", len(children))
+                if i > 0:
+                    node.children[i].left_sibling =node.children[i-1]
+                    #st.write("try 2")
+
+        for i, node in enumerate(w.nodes):
+            st.write("=======================")
+            st.write("i= ", i," ...node id: ", node.id)
+            st.write("len(children): ", len(node.children))
+            try:
+                st.write("node left sibling: ", node.left_sibling.id)
+                pass
+            except:
+                pass
+            try:
+                st.write("node right sibling: ", node.right_sibling.id)
+                pass
+            except:
+                pass
+            try:
+                st.write("node parent: ", node.parent.id)
+                pass
+            except:
+                pass
+        st.write("===========================")
+        #st.stop()
+        return w, nodes
+
+    w, nodes = transform_for_walker(node_df, edge_df)
+    st.write("exit transform_for_walker")
+
+    st.write("before position_tree")
+    w.position_tree()
+    st.write("after position_tree")
+    # I got the export, but not the correct positioning
+    w.export_to_frame('w_node_df', 'w_edge_df')
+    st.write("finished exporting")
+    st.stop()
+    #----------------------
+
+    st.stop()
 
     node_df = computePos(node_df, edge_df, xmax, ymax, dx, dy)
 

@@ -2335,6 +2335,14 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         #st.write("outbounds= ", outbounds)
         nodes.extend(outbounds['id_nf'].tolist())  # This is the list of nodes
 
+        ## DEBUG: check whether "2019/10/01PTYROS20:16805" is in the outbounds['id_nf']
+        nb_search = (outbounds['id_nf'] == '2019/10/01PTYROS20:16805').sum()
+        st.write("nb_search= ", nb_search)
+        if nb_search > 0: 
+            st.write("ID FOUND: outbounds: ", outbounds)
+            #st.stop()
+
+
         edges = outbounds['id_nf'].to_frame('e2')  # e2 is id_nf
         edges['e1'] = inbound   # e1 is id_f
         edges['id'] = edges['e1'] + '_' + edges['e2']
@@ -2484,8 +2492,9 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         #st.write("ID, last node_df: ", node_df)
         #st.write("ID, last edge_df: ", edge_df)
 
-        #st.write("node_df: ", node_df)
-        #st.write("edge_df: ", edge_df)
+        st.write("node_df: ", node_df)
+        st.write("edge_df: ", edge_df)
+        #if nb_search > 0: st.stop()  # DEBUGGING
         #st.write(node_df.shape, edge_df.shape)
 
         # Only the first ix
