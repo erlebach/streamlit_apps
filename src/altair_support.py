@@ -47,30 +47,14 @@ def createStepLines(node_df, edge_df, edge_labels=('id_f_y','id_nf_y')):
         # For each edge, create a set of nodes, stored in a special dataframe
         # For now, use loops since there are not many edges
 
-        #st.write("createStepLines: node_df: ", node_df)
         e1 = edge_df[edge_labels[0]]
         e2 = edge_df[edge_labels[1]]
-        #st.write("edge_df= ", edge_df, edge_df.shape)
-        #st.write("e1= ", e1, e1.shape)
-        #st.write("e2= ", e2, e2.shape)
-        #st.write("step: node_df, lev=1 ", node_df[node_df['lev']==1])
-        #st.write("step: node_df, lev=2 ", node_df[node_df['lev']==2])
 
         # x,y of node 1 and 2 of each edge.
         # Construct intermediate points (ids1a and ids1b)
-        #st.write("createStepLines: ", node_df)
         ids1 = node_df.set_index('id').loc[e1.tolist()].reset_index()[['x','y']]
-        #st.write("ids1: ", ids1) # seems correct
-        #st.write("ids1: ", ids1.shape) # seems correct
 
         ids2 = node_df.set_index('id').loc[e2.tolist()].reset_index()[['x','y']]
-        #st.write("ids2: ", ids2) # ERROR: 4 additional rows. From where? 
-        #st.write("ids2: ", ids2.shape) # seems correct
-        #st.stop()
-
-        #st.write("edge_df: ", edge_df)
-
-        #st.stop()
 
         ## REASON FOR ERROR: PTY-CUN does not have a return flight to PTY .
         # There is an error in edge array. There is one too many edges.
@@ -78,14 +62,10 @@ def createStepLines(node_df, edge_df, edge_labels=('id_f_y','id_nf_y')):
 
 
         ids1a = pd.DataFrame([ids1.x, 0.5*(ids1.y+ids2.y)]).transpose()
-        #st.write("ids1a: ", ids1a) # seems correct
         ids1b = pd.DataFrame([ids2.x, 0.5*(ids1.y+ids2.y)]).transpose()
-        #st.write("ids1b: ", ids1b) # Last element x=0.28 is wrong
  
         df_step = pd.concat([ids1, ids1a, ids1b, ids2], axis=1)
-        #st.write("df_step: ", df_step) # already wrong
         df_step.columns = ['x1','y1','x2','y2','x3','y3','x4','y4']
-        #st.stop()
 
         # Now create one line per edge: 
         #  col 1: [x1,x2,x3,x4].row1
@@ -94,7 +74,6 @@ def createStepLines(node_df, edge_df, edge_labels=('id_f_y','id_nf_y')):
         #  col 4: [y1,y2,y3,y4].row2
         df_step_x = df_step[['x1','x2','x3','x4']].transpose()
         df_step_y = df_step[['y1','y2','y3','y4']].transpose()
-        #st.write("df_step_x= ", df_step_x) # already x19 is wrong
 
         # relabel the columns of df_step_x as 'x0', 'x1', ..., 'x15'
         # relabel the columns of df_step_y as 'y0', 'y1', ..., 'y15'
@@ -103,14 +82,11 @@ def createStepLines(node_df, edge_df, edge_labels=('id_f_y','id_nf_y')):
 
         df_step_x = df_step_x.reset_index(drop=True)
         df_step_y = df_step_y.reset_index(drop=True)
-        #st.write("2 df_step_x= ", df_step_x)
-        #st.write("df_step: ", df_step)
 
         df_step = pd.concat([df_step_x, df_step_y], axis=1)
 
         # Create a dataframe
         df_step = df_step.reset_index()  # generates an index column
-        #st.write("df_step: ", df_step)
         return df_step
 
 
@@ -524,47 +500,164 @@ def misc_computations(fsu):
 
     st.write(fss.iloc[range(0,fss.shape[0],7),:][['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD']])
 
-    #------------------------------------------------------------
+#---------------------------------------------------------
+def restrictNumberOfNodes(node_df, edge_df):
+    # Streamlit does not update properly when rerun, when changing nb
+    # Bothersome
+    #nb = 12  # 
+    """
+    8	6.5	320.8
+    9	12.5	320.8
+    10	18.5	320.8
+    11	30.5	320.8
+    12	0.5	480.8
+    """
+    #nb = 13  # Looks ok (sometimes), and sometimes I get all zeros. HOW? WhY?
+             # Works when I remove all nodes not used. So the graph is connected. 
+             # I get a "should not happen" in walker.py. 
+             ## DRAW THE NETWORK. WHAT IS WRONG? Perhaps not a tree? 
+             # There is probably an error in handle*Id(), which should be simplified. 
+    """
+    10	18.5	320.8
+    11	30.5	320.8
+    12	0.5	480.8   # level 2
+    13	0	0    # THIS IS AN ERROR
+    """#
+    #nb = 14  # There is an x coordinate of zero for node 13 
+    """
+    12	0.5	480.8
+    13	0	0
+    14	6.5	480.8
+    """
 
-# Create Altair Chart
+    # Node 13 does not appear to be in the edge_df. Did I make an error? 
+    # How can node 13 appear if there is no edge? 
+    #xx = edge_df[(edge_df['id_f_y'] == 13) or (edge_df['id_nf_y'] == 13)]
+    #xx = edge_df[edge_df['id_f_y'] == 13]
+    #st.write("edges with 13 as a node: ", xx)
+    #xx = edge_df[edge_df['id_nf_y'] == 13]
+    #st.write("edges with 13 as a node: ", xx)
+    # There are no edges with node 13 as a node. This indcates an error. 
+    # I must go back to hande*Id() and find out where I made the mistake. 
+    #st.stop() # <<<<
 
-# Allow tooltip to work in full screen mode (expanded view)
-# From: https://discuss.streamlit.io/t/tool-tips-in-fullscreen-mode-for-charts/6800/9
-st.markdown('<style>#vg-tooltip-element{z-index: 1000051}</style>',
-             unsafe_allow_html=True)
+    # UNCOMMENT to limit the number of nodes
+    #node_df = node_df.iloc[0:nb+1]
+    #edge_df = edge_df[edge_df['id_f_y'] <= nb]
+    #edge_df = edge_df[edge_df['id_nf_y'] <= nb]
+    #st.write(".node_df: ", node_df)
+    #st.write(".edge_df: ", edge_df)
+    #st.write(f'gordon, {nb}')
 
-#-------------------------------------------------------------
-def drawPlot3(node_df, edge_df, which_tooltip, xmin, xmax, ymax, dx, dy, rect_color, text_color):
-    nb_nodes = node_df.shape[0]
-    nb_edges = edge_df.shape[0]
+def transform_for_walker(node_df, edge_df):
+    ids = node_df['id'].tolist()
+    nodes = {}
 
-    # Remove duplicates in nb_nodes: 2019/10/01PTYROS20:16805 is duplicate
-    node_df = node_df.drop_duplicates()
+    w = Walker(debug=True, rootX=0.5, rootY=0.8)
+    w.config['NODE_SIZE'] = 2
+    w.config['NODE_SEPARATION'] = 4
+    w.config['TREE_SEPARATION'] = 4
 
-    # THE DUPLICATES MUST BE REMOVED in handle*Id() before edge array is filled
+    for fid in ids:
+        nodes[fid] = Node(ID=fid)
+        w.add_node(nodes[fid])
 
-    node_df = node_df.reset_index(drop=True)
-    edge_df = edge_df.reset_index(drop=True)
+    #for node in w.nodes:
+        #st.write("Walker node id list: ", node.id)
 
-    # CUNPTY, id: 2019/10/01/CUNPTY12:50354 appears twice! HOW!
-    # I must make sure the tails match
+    #for key, val in nodes.items():
+        #st.write("Walker node id list: ", key, val, val.id)
+        #st.write("++++++")
 
-    #xmax = 4.
-    #st.write("************ xmax= ", xmax, "*******************")
-    #st.write("drawPlot3, node_df: ", node_df)
-    #st.write("drawPlot3, edge_df: ", edge_df)
+    st.write(edge_df.columns)
+    src = edge_df['id_f_y']
+    dest = edge_df['id_nf_y']
 
-    # Is there a faster method? Do not add the duplicates in the first place. 
-    #node_df = node_df.drop_duplicates(keep='first')
-    ### CUNPTY duplicate removed
-    #st.write("drawPlot3, --- drop dups, node_df: ", node_df)
+    st.write(node_df)
+    st.write(edge_df)
 
-    # transform all ids into integers. Create dictionary str_id ==> int_id
-    # no concern for efficiency since this is for debugging Walker's algorithm
+    for s, d in zip(src, dest):
+        nodes[d].parent = nodes[s]
+        nodes[s].children.append(nodes[d])
 
-    st.write("node_df: ", node_df)
-    st.write("edge_df: ", edge_df)
+    for node in w.nodes:
+        children = node.children
+        for i in range(len(node.children)):
+            try:
+                #st.write("i= ", i, "... len(children) 1: ", len(children))
+                node.children[i].right_sibling = node.children[i+1]
+                #st.write("try 1")
+            except:
+                #st.write("except 1")
+                pass
+                #st.write("i= ", i, "... len(children) 1: ", len(children))
+            if i > 0:
+                node.children[i].left_sibling =node.children[i-1]
+                #st.write("try 2")
 
+    for i, node in enumerate(w.nodes):
+        #st.write("=======================")
+        #st.write("i= ", i," ...node id: ", node.id)
+        #st.write("len(children): ", len(node.children))
+        try:
+            #st.write("node left sibling: ", node.left_sibling.id)
+            pass
+        except:
+            pass
+        try:
+            #st.write("node right sibling: ", node.right_sibling.id)
+            pass
+        except:
+            pass
+        try:
+            #st.write("node parent: ", node.parent.id)
+            pass
+        except:
+            pass
+    return w, nodes
+
+#-----------------------------------------------------------
+def removeAdditionalEdges(node_df, edge_df):
+    # Compute the in-degree of all nodes. Nodes with in-degree greater
+    # than unity havfe multiple parents. 
+    in_degree = defaultdict(int)  # in_degree for each node
+    avail_d = defaultdict(list)  # in_degree for each node
+
+    src = edge_df['id_f_y']
+    dest = edge_df['id_nf_y']
+    avail = edge_df['avail']
+    edge_ids = edge_df['id_f_nf']
+    removed_edges = []
+
+    for s, d, avail, edge_id in zip(src, dest, avail, edge_ids):
+        in_degree[d] += 1
+        avail_d[d].append((avail, edge_id))
+
+    for k,v in in_degree.items():
+        if v > 1:
+            # identify the edge with smallest avail_d. Keep it and 
+            # remove the others. 
+            avail_d[k].sort(key=lambda x: x[0])
+            # edge to keep: 
+            keep = avail_d[k][0][1]
+            remove =  [avail_d[k][i][1] for i in range(1,len(avail_d[k]))]
+            removed_edges.extend(remove)
+
+    # Identify the edges connected to nodes with in_degree > 1. HOW?
+    # return edges_to_remove, edges_removed
+    #st.write("removed_edges: ", removed_edges)
+    #st.write("edge_df: ", edge_df.shape)
+    #st.write("edge_df: ", edge_df)
+    edge_df = edge_df.set_index('id_f_nf', drop=True).drop(index=removed_edges, axis=0).reset_index()
+
+    #st.write("edge_df: ", edge_df.shape)
+    #st.write("edge_df: ", edge_df)
+
+    # Should have saved the entire row instead of the removed edge ids
+    return edge_df, removed_edges
+
+#---------------------------------------------------------------
+def convertIdsToInts(node_df, edge_df):
     str2id = {}
     for i in range(node_df.shape[0]):
         fid = node_df.iloc[i].id
@@ -580,130 +673,36 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmin, xmax, ymax, dx, dy, rect_co
     edge_df.id_f_y = id_f_y  # do not relabel
     edge_df.id_nf_y = id_nf_y  # do not relabel
 
+    return node_df, edge_df
+
+
+#-------------------------------------------------------------
+def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_color):
+
+    nb_nodes = node_df.shape[0]
+    nb_edges = edge_df.shape[0]
+
+    # Remove duplicates in nb_nodes: 2019/10/01PTYROS20:16805 is duplicate
+    node_df = node_df.drop_duplicates()
+
+    # THE DUPLICATES MUST BE REMOVED in handle*Id() before edge array is filled
+
+    node_df = node_df.reset_index(drop=True)
+    edge_df = edge_df.reset_index(drop=True)
+
+    # CUNPTY, id: 2019/10/01/CUNPTY12:50354 appears twice! HOW!
+    # I must make sure the tails match
+
+    # transform all ids into integers. Create dictionary str_id ==> int_id
+    # no concern for efficiency since this is for debugging Walker's algorithm
+
+    node_df, edge_df = convertIdsToInts(node_df, edge_df)
+
     st.write("node_df: ", node_df)
     st.write("edge_df: ", edge_df)
 
-    #node_df = node_df[node_df['lev'] < 2] # nodes 0 -> 6 included
-    #node_df = node_df[node_df['lev'] < 3] # nodes 0 -> 11 included
-    st.write(node_df)
-    # keep all levels of nodes, and increase number of edges slowly
-
-    # Streamlit does not update properly when rerun, when changing nb
-    # Bothersome
-    #nb = 12  # 
-    """
-   	8	6.5	320.8
-	9	12.5	320.8
-	10	18.5	320.8
-	11	30.5	320.8
-	12	0.5	480.8
-    """
-    nb = 13  # Looks ok (sometimes), and sometimes I get all zeros. HOW? WhY?
-             # Works when I remove all nodes not used. So the graph is connected. 
-             # I get a "should not happen" in walker.py. 
-             ## DRAW THE NETWORK. WHAT IS WRONG? Perhaps not a tree? 
-             # There is probably an error in handle*Id(), which should be simplified. 
-    """
-    10	18.5	320.8
-	11	30.5	320.8
-	12	0.5	480.8   # level 2
-	13	0	0    # THIS IS AN ERROR
-    """#
-    #nb = 14  # There is an x coordinate of zero for node 13 
-    """
-   	12	0.5	480.8
-	13	0	0
-	14	6.5	480.8
-    """
-
-    # Node 13 does not appear to be in the edge_df. Did I make an error? 
-    # How can node 13 appear if there is no edge? 
-    #xx = edge_df[(edge_df['id_f_y'] == 13) or (edge_df['id_nf_y'] == 13)]
-    xx = edge_df[edge_df['id_f_y'] == 13]
-    st.write("edges with 13 as a node: ", xx)
-    xx = edge_df[edge_df['id_nf_y'] == 13]
-    st.write("edges with 13 as a node: ", xx)
-    # There are no edges with node 13 as a node. This indcates an error. 
-    # I must go back to hande*Id() and find out where I made the mistake. 
-    #st.stop() # <<<<
-
-    # UNCOMMENT to limit the number of nodes
-    #node_df = node_df.iloc[0:nb+1]
-    #edge_df = edge_df[edge_df['id_f_y'] <= nb]
-    #edge_df = edge_df[edge_df['id_nf_y'] <= nb]
-    #st.write(".node_df: ", node_df)
-    #st.write(".edge_df: ", edge_df)
-    #st.write(f'gordon, {nb}')
-
-
-    def transform_for_walker(node_df, edge_df):
-        ids = node_df['id'].tolist()
-        nodes = {}
-
-        w = Walker(debug=True, rootX=0.5, rootY=0.8)
-        w.config['NODE_SIZE'] = 2
-        w.config['NODE_SEPARATION'] = 4
-        w.config['TREE_SEPARATION'] = 4
-
-        for fid in ids:
-            nodes[fid] = Node(ID=fid)
-            w.add_node(nodes[fid])
-
-        #for node in w.nodes:
-            #st.write("Walker node id list: ", node.id)
-
-        #for key, val in nodes.items():
-            #st.write("Walker node id list: ", key, val, val.id)
-            #st.write("++++++")
-
-        st.write(edge_df.columns)
-        src = edge_df['id_f_y']
-        dest = edge_df['id_nf_y']
-
-        st.write(node_df)
-        st.write(edge_df)
-
-        for s, d in zip(src, dest):
-            nodes[d].parent = nodes[s]
-            nodes[s].children.append(nodes[d])
-
-        for node in w.nodes:
-            children = node.children
-            for i in range(len(node.children)):
-                try:
-                    #st.write("i= ", i, "... len(children) 1: ", len(children))
-                    node.children[i].right_sibling = node.children[i+1]
-                    #st.write("try 1")
-                except:
-                    #st.write("except 1")
-                    pass
-                    #st.write("i= ", i, "... len(children) 1: ", len(children))
-                if i > 0:
-                    node.children[i].left_sibling =node.children[i-1]
-                    #st.write("try 2")
-
-        for i, node in enumerate(w.nodes):
-            #st.write("=======================")
-            #st.write("i= ", i," ...node id: ", node.id)
-            #st.write("len(children): ", len(node.children))
-            try:
-                #st.write("node left sibling: ", node.left_sibling.id)
-                pass
-            except:
-                pass
-            try:
-                #st.write("node right sibling: ", node.right_sibling.id)
-                pass
-            except:
-                pass
-            try:
-                #st.write("node parent: ", node.parent.id)
-                pass
-            except:
-                pass
-        st.write("===========================")
-        return w, nodes
-
+    # For debugging
+    # node_df, edge_df = restrictNumberOfNodes(node_df, edge_df)
 
     # The problem that at 3 levels, I no longer have a tree. Certain 
     # outbound flights have multiple feeders. That obviously leads to 
@@ -712,92 +711,49 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmin, xmax, ymax, dx, dy, rect_co
     # connection time, since it is the most important. Once the graph 
     # is computed, the edges will be reinserted. 
 
-    def removeAdditionalEdges(node_df, edge_df):
-        # Compute the in-degree of all nodes. Nodes with in-degree greater
-        # than unity havfe multiple parents. 
-        in_degree = defaultdict(int)  # in_degree for each node
-        avail_d = defaultdict(list)  # in_degree for each node
-
-        src = edge_df['id_f_y']
-        dest = edge_df['id_nf_y']
-        avail = edge_df['avail']
-        edge_ids = edge_df['id_f_nf']
-        removed_edges = []
-
-        for s, d, avail, edge_id in zip(src, dest, avail, edge_ids):
-            in_degree[d] += 1
-            avail_d[d].append((avail, edge_id))
-
-        for k,v in in_degree.items():
-            if v > 1:
-                # identify the edge with smallest avail_d. Keep it and 
-                # remove the others. 
-                avail_d[k].sort(key=lambda x: x[0])
-                # edge to keep: 
-                keep = avail_d[k][0][1]
-                remove =  [avail_d[k][i][1] for i in range(1,len(avail_d[k]))]
-                removed_edges.extend(remove)
-
-        # Identify the edges connected to nodes with in_degree > 1. HOW?
-        # return edges_to_remove, edges_removed
-        #st.write("removed_edges: ", removed_edges)
-        #st.write("edge_df: ", edge_df.shape)
-        #st.write("edge_df: ", edge_df)
-        edge_df = edge_df.set_index('id_f_nf', drop=True).drop(index=removed_edges, axis=0).reset_index()
-
-        #st.write("edge_df: ", edge_df.shape)
-        #st.write("edge_df: ", edge_df)
-
-        # Should have saved the entire row instead of the removed edge ids
-        return edge_df, removed_edges
-
     edge_df1, removed_edges = removeAdditionalEdges(node_df, edge_df)
-    #st.write("node_df: ", node_df1)
-    #st.write("edge_df: ", edge_df1)
-
     w, nodes = transform_for_walker(node_df, edge_df1)
-    #st.write("exit transform_for_walker")
+    #st.write("shapes: ", edge_df.shape, edge_df1.shape)
 
-    #st.write("before position_tree")
     w.position_tree()
-    #st.write("after position_tree")
     # I got the export, but not the correct positioning
     w.export_to_frame('w_node_df', 'w_edge_df')
-    #st.write("finished exporting")
+
+    #st.write("edge_structure: ", edge_structure)
+    if edge_structure == 'Tree':
+        edge_df = edge_df1.copy()
+
 
     w_nodes_df = pd.read_csv("w_node_df")
 
-    # merge with w_nodes
+    # merge with w_nodes to incorporate (x,y) into node_df
+    # cannot use concat since the node orders might differ
     node_df = pd.merge(node_df, w_nodes_df, how='inner', on='id')
-    #st.write("after: nodes_df: ", node_df)
 
+    # Compute extent of domain
+    xmin = node_df.x.min()
+    xmax = node_df.x.max()
+    ymin = node_df.y.min()
+    ymax = node_df.y.max() 
+    xmin -= 0.05 * (xmax - xmin)
+    xmax += 0.05 * (xmax - xmin)
+    ymin -= 0.15 * (ymax - ymin)
+    ymax += 0.15 * (ymax - ymin)
+    st.write("min/max: ", xmin, xmax)
+    st.write("min/max: ", ymin, ymax)
 
-    # It worked!!!
-
-    # Now add back the nodes that were deleted. 
-    # TODOx
     #----------------------
-
-
-    #node_df = computePos(node_df, edge_df, xmax, ymax, dx, dy)
-
-
-    #st.write("drawPlot3: ", node_df)
-    #st.stop()
 
     xscale = alt.Scale(domain=[xmin, xmax])
     yscale = alt.Scale(domain=[0.,ymax])
 
-    #st.write("before createStep, node_df: ", node_df)
-
     # Create and draw edges as a series of horizontal and vertical lines
     #df_step = createStepLines(node_df, edge_df)
-    #st.write("df_step: ", df_step)
 
     # SAVE TO FILE
     node_df.to_csv("node_df.csv", index=0)
     edge_df.to_csv("edge_df.csv", index=0)
-    #df_step.to_csv("df_step", index=0)
+
 
     #layers = drawStepEdges(df_step, scale=xscale)
 
@@ -823,10 +779,9 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmin, xmax, ymax, dx, dy, rect_co
         color=rect_color,
         align='center',
     ).encode(
-        # Set x axis limits to [0,1]
         x = alt.X('x:Q', scale=xscale),
         y = 'y:Q',
-        # color = 'arr_delay', # not drawn if NaN
+        #color = 'arr_delay', # not drawn if NaN
     )
 
     node_tooltips = alt.Chart(node_df).mark_circle(
@@ -915,7 +870,8 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmin, xmax, ymax, dx, dy, rect_co
     #full_chart = (layers + nodes) # + node_text + node_tooltips + mid_edges)
     #full_chart = (layers + node_text) # + edges + nodes + node_text + node_tooltips + mid_edges)
     #full_chart = (layers + edges + nodes + node_text + node_tooltips + mid_edges)
-    full_chart = (edges + nodes + node_text + node_tooltips + mid_edges)
+    #full_chart = (edges + nodes + node_text + node_tooltips + mid_edges)
+    full_chart = (nodes + node_tooltips)
 
     # Chart Configuration
     full_chart = full_chart.configure_axisX(
