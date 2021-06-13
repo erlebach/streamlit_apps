@@ -739,8 +739,8 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
     xmax += 0.05 * (xmax - xmin)
     ymin -= 0.15 * (ymax - ymin)
     ymax += 0.15 * (ymax - ymin)
-    st.write("min/max: ", xmin, xmax)
-    st.write("min/max: ", ymin, ymax)
+    #st.write("min/max: ", xmin, xmax)
+    #st.write("min/max: ", ymin, ymax)
 
     #----------------------
 
@@ -800,23 +800,20 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
         align='center',
         baseline='middle'
     ).encode(
-        #x = 'x:Q',
         x = alt.X('x:Q', scale=xscale),
         y = 'y:Q',
         text='od',
         size=alt.value(10)
     )
 
-    st.write("Draw edges, edge_df: ", edge_df)
+    #st.write("Draw edges, edge_df: ", edge_df)
     # Create a data frame with as many columns as there are edges. 
     # Each column is four points. 
     edges = alt.Chart(edge_df).mark_rule(   # all edges
-    #edges = alt.Chart(edge_df1).mark_rule(   # removed edges
         strokeOpacity=1.0,
         stroke='yellow',
         strokeWidth=1.,
     ).encode(
-        #x = 'x:Q',
         x = alt.X('x:Q', scale=xscale),
         y = 'y:Q',
         x2 = 'x2:Q',
@@ -834,8 +831,7 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
         as_=['x2', 'y2']
     )
 
-    mid_edges = alt.Chart(edge_df).mark_circle(color='yellow', size=50, opacity=0.1).encode(
-        #x = 'mid_x:Q',
+    mid_edges = alt.Chart(edge_df).mark_circle(color='yellow', size=200, opacity=0.8).encode(
         x = alt.X('mid_x:Q', scale=xscale),
         y = 'mid_y:Q',
         tooltip= ['avail','planned','delta','pax']
@@ -854,24 +850,21 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
     )
 
     if which_tooltip == 'Edge':
-        #col1.write("add edge tip")
         mid_edges = mid_edges.add_selection(
             edge_nearest
         )
     elif which_tooltip == 'Node':
-        #col1.write("add node tip")
         node_tooltips = node_tooltips.add_selection(
             node_nearest
         )
     elif which_tooltip == 'Off':
-        #col1.write("no tooltips")
         pass
 
     #full_chart = (layers + nodes) # + node_text + node_tooltips + mid_edges)
     #full_chart = (layers + node_text) # + edges + nodes + node_text + node_tooltips + mid_edges)
     #full_chart = (layers + edges + nodes + node_text + node_tooltips + mid_edges)
-    #full_chart = (edges + nodes + node_text + node_tooltips + mid_edges)
-    full_chart = (nodes + node_tooltips)
+    full_chart = (edges + nodes + node_text + node_tooltips + mid_edges)
+    #full_chart = (nodes + node_tooltips)
 
     # Chart Configuration
     full_chart = full_chart.configure_axisX(

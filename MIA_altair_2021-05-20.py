@@ -281,9 +281,9 @@ inbounds = node_df1.groupby('lev').get_group(1)
 
 #outbounds = fsu.set_index('id', drop=True).loc[inbounds.id]
 
-st.write("inbounds lev 0: ", node_df1.groupby('lev').get_group(0))
-st.write("inbounds lev 1: ", inbounds)
-st.write("inbounds lev 2: ", node_df1.groupby('lev').get_group(2))
+#st.write("inbounds lev 0: ", node_df1.groupby('lev').get_group(0))
+#st.write("inbounds lev 1: ", inbounds)
+#st.write("inbounds lev 2: ", node_df1.groupby('lev').get_group(2))
 
 # Get second tier for flights
 #st.write("First tier: node_df1= ", node_df1)
@@ -298,8 +298,8 @@ ids = node_df1.groupby('lev').get_group(2)['id'].to_list()
 #st.write("ids for call to hand*Id*lev2", ids)
 
 # Next level of flights
-st.write("=== Next level of flights ===")
-st.write("ids= ", ids)
+#st.write("=== Next level of flights ===")
+#st.write("ids= ", ids)
 #st.write("feeders: ", feeders.sort_values('id_f'), feeders.shape)
 
 if True:

@@ -2336,11 +2336,12 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         nodes.extend(outbounds['id_nf'].tolist())  # This is the list of nodes
 
         ## DEBUG: check whether "2019/10/01PTYROS20:16805" is in the outbounds['id_nf']
-        nb_search = (outbounds['id_nf'] == '2019/10/01PTYROS20:16805').sum()
-        st.write("nb_search= ", nb_search)
-        if nb_search > 0: 
-            st.write("ID FOUND: outbounds: ", outbounds)
-            #st.stop()
+        #nb_search = (outbounds['id_nf'] == '2019/10/01PTYROS20:16805').sum()
+        #st.write("nb_search= ", nb_search)
+
+        #if nb_search > 0: 
+            #st.write("ID FOUND: outbounds: ", outbounds)
+            ##st.stop()
 
 
         edges = outbounds['id_nf'].to_frame('e2')  # e2 is id_nf
@@ -2492,8 +2493,8 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         #st.write("ID, last node_df: ", node_df)
         #st.write("ID, last edge_df: ", edge_df)
 
-        st.write("node_df: ", node_df)
-        st.write("edge_df: ", edge_df)
+        #st.write("node_df: ", node_df)
+        #st.write("edge_df: ", edge_df)
         #if nb_search > 0: st.stop()  # DEBUGGING
         #st.write(node_df.shape, edge_df.shape)
 
@@ -2503,7 +2504,7 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         return node_df, edge_df
 
 #---------------------------------------------------------
-def handleCityGraphIdLev2(flight_id, keep_early_arr, id_list, fsu, bookings_f, feeders, is_print=True, delay=45, flight_id_level=0):
+def handleCityGraphIdLev2_xxx(flight_id, keep_early_arr, id_list, fsu, bookings_f, feeders, is_print=True, delay=45, flight_id_level=0):
     """
     Given an inbound flight to PTY return the corresponding outbound flighs
     Return a tuple of Dataframes with node and edges
