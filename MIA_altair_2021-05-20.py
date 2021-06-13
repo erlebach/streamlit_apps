@@ -104,8 +104,11 @@ init_ix = int(np.where(cities == 'SJO')[0][0])
 which_city = st.sidebar.selectbox("Select a City: ", cities, index=init_ix)
 delay = st.sidebar.slider("Keep Connection times less than (min)", 0, 120, value=70)
 
-xmax = st.sidebar.slider("Domain size in X", 0, 15, 2)
-ymax = st.sidebar.slider("Domain size in Y", 0, 2, 1)
+#xmax = st.sidebar.slider("Domain size in X", 0, 15, 2)
+xmin = col1.number_input("Min X", -100., value=-10.)
+xmax = col1.number_input("Max X", 0.)
+#ymax = st.sidebar.slider("Domain size in Y", 0, 2, 1)
+ymax = st.sidebar.slider("Domain size in Y", 0, 480, 600)
 dx = st.sidebar.slider("Delta(x)", 0.1, 1., .1)
 dy = st.sidebar.slider("Delta(y)", 0.1, 1., .2)
 
@@ -378,7 +381,7 @@ if edge_df.shape[0] == 0:
 else:
     # drawPlot2: edges are still oblique
     # drawPlot3: edges are step functions, horizontal/vertical
-    chart3 = altsup.drawPlot3(node_df, edge_df, which_tooltip, xmax, ymax, dx, dy, rect_color, text_color)
+    chart3 = altsup.drawPlot3(node_df, edge_df, which_tooltip, xmin, xmax, ymax, dx, dy, rect_color, text_color)
     col2.altair_chart(chart3, use_container_width=True)
 
 st.stop()

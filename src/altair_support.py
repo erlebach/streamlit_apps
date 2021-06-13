@@ -534,7 +534,7 @@ st.markdown('<style>#vg-tooltip-element{z-index: 1000051}</style>',
              unsafe_allow_html=True)
 
 #-------------------------------------------------------------
-def drawPlot3(node_df, edge_df, which_tooltip, xmax, ymax, dx, dy, rect_color, text_color):
+def drawPlot3(node_df, edge_df, which_tooltip, xmin, xmax, ymax, dx, dy, rect_color, text_color):
     nb_nodes = node_df.shape[0]
     nb_edges = edge_df.shape[0]
 
@@ -570,15 +570,15 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmax, ymax, dx, dy, rect_color, t
         fid = node_df.iloc[i].id
         str2id[fid] = i
     fids = list(range(0,node_df.shape[0]))
-    node_df.id = fids
+    node_df.id = fids   # Do not relabel
 
     id_f_y = edge_df['id_f_y'].values
     id_nf_y = edge_df['id_nf_y'].values
     for i in range(edge_df.shape[0]):
         id_f_y[i] = str2id[id_f_y[i]]
         id_nf_y[i] = str2id[id_nf_y[i]]
-    edge_df.id_f_y = id_f_y
-    edge_df.id_nf_y = id_nf_y
+    edge_df.id_f_y = id_f_y  # do not relabel
+    edge_df.id_nf_y = id_nf_y  # do not relabel
 
     st.write("node_df: ", node_df)
     st.write("edge_df: ", edge_df)
@@ -627,12 +627,13 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmax, ymax, dx, dy, rect_color, t
     # I must go back to hande*Id() and find out where I made the mistake. 
     #st.stop() # <<<<
 
-    node_df = node_df.iloc[0:nb+1]
-    edge_df = edge_df[edge_df['id_f_y'] <= nb]
-    edge_df = edge_df[edge_df['id_nf_y'] <= nb]
-    st.write(".node_df: ", node_df)
-    st.write(".edge_df: ", edge_df)
-    st.write(f'gordon, {nb}')
+    # UNCOMMENT to limit the number of nodes
+    #node_df = node_df.iloc[0:nb+1]
+    #edge_df = edge_df[edge_df['id_f_y'] <= nb]
+    #edge_df = edge_df[edge_df['id_nf_y'] <= nb]
+    #st.write(".node_df: ", node_df)
+    #st.write(".edge_df: ", edge_df)
+    #st.write(f'gordon, {nb}')
 
 
     def transform_for_walker(node_df, edge_df):
@@ -658,6 +659,10 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmax, ymax, dx, dy, rect_color, t
         st.write(edge_df.columns)
         src = edge_df['id_f_y']
         dest = edge_df['id_nf_y']
+
+        st.write(node_df)
+        st.write(edge_df)
+
         for s, d in zip(src, dest):
             nodes[d].parent = nodes[s]
             nodes[s].children.append(nodes[d])
@@ -678,61 +683,123 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmax, ymax, dx, dy, rect_color, t
                     #st.write("try 2")
 
         for i, node in enumerate(w.nodes):
-            st.write("=======================")
-            st.write("i= ", i," ...node id: ", node.id)
-            st.write("len(children): ", len(node.children))
+            #st.write("=======================")
+            #st.write("i= ", i," ...node id: ", node.id)
+            #st.write("len(children): ", len(node.children))
             try:
-                st.write("node left sibling: ", node.left_sibling.id)
+                #st.write("node left sibling: ", node.left_sibling.id)
                 pass
             except:
                 pass
             try:
-                st.write("node right sibling: ", node.right_sibling.id)
+                #st.write("node right sibling: ", node.right_sibling.id)
                 pass
             except:
                 pass
             try:
-                st.write("node parent: ", node.parent.id)
+                #st.write("node parent: ", node.parent.id)
                 pass
             except:
                 pass
         st.write("===========================")
-        #st.stop()
         return w, nodes
 
-    w, nodes = transform_for_walker(node_df, edge_df)
-    st.write("exit transform_for_walker")
 
-    st.write("before position_tree")
+    # The problem that at 3 levels, I no longer have a tree. Certain 
+    # outbound flights have multiple feeders. That obviously leads to 
+    # complexities. To transform the graph to a tree, various edges must
+    # be removed. For starters, we will select the feeder with the minimum
+    # connection time, since it is the most important. Once the graph 
+    # is computed, the edges will be reinserted. 
+
+    def removeAdditionalEdges(node_df, edge_df):
+        # Compute the in-degree of all nodes. Nodes with in-degree greater
+        # than unity havfe multiple parents. 
+        in_degree = defaultdict(int)  # in_degree for each node
+        avail_d = defaultdict(list)  # in_degree for each node
+
+        src = edge_df['id_f_y']
+        dest = edge_df['id_nf_y']
+        avail = edge_df['avail']
+        edge_ids = edge_df['id_f_nf']
+        removed_edges = []
+
+        for s, d, avail, edge_id in zip(src, dest, avail, edge_ids):
+            in_degree[d] += 1
+            avail_d[d].append((avail, edge_id))
+
+        for k,v in in_degree.items():
+            if v > 1:
+                # identify the edge with smallest avail_d. Keep it and 
+                # remove the others. 
+                avail_d[k].sort(key=lambda x: x[0])
+                # edge to keep: 
+                keep = avail_d[k][0][1]
+                remove =  [avail_d[k][i][1] for i in range(1,len(avail_d[k]))]
+                removed_edges.extend(remove)
+
+        # Identify the edges connected to nodes with in_degree > 1. HOW?
+        # return edges_to_remove, edges_removed
+        #st.write("removed_edges: ", removed_edges)
+        #st.write("edge_df: ", edge_df.shape)
+        #st.write("edge_df: ", edge_df)
+        edge_df = edge_df.set_index('id_f_nf', drop=True).drop(index=removed_edges, axis=0).reset_index()
+
+        #st.write("edge_df: ", edge_df.shape)
+        #st.write("edge_df: ", edge_df)
+
+        # Should have saved the entire row instead of the removed edge ids
+        return edge_df, removed_edges
+
+    edge_df1, removed_edges = removeAdditionalEdges(node_df, edge_df)
+    #st.write("node_df: ", node_df1)
+    #st.write("edge_df: ", edge_df1)
+
+    w, nodes = transform_for_walker(node_df, edge_df1)
+    #st.write("exit transform_for_walker")
+
+    #st.write("before position_tree")
     w.position_tree()
-    st.write("after position_tree")
+    #st.write("after position_tree")
     # I got the export, but not the correct positioning
     w.export_to_frame('w_node_df', 'w_edge_df')
-    st.write("finished exporting")
-    st.stop()
+    #st.write("finished exporting")
+
+    w_nodes_df = pd.read_csv("w_node_df")
+
+    # merge with w_nodes
+    node_df = pd.merge(node_df, w_nodes_df, how='inner', on='id')
+    #st.write("after: nodes_df: ", node_df)
+
+
+    # It worked!!!
+
+    # Now add back the nodes that were deleted. 
+    # TODOx
     #----------------------
 
-    st.stop()
 
-    node_df = computePos(node_df, edge_df, xmax, ymax, dx, dy)
+    #node_df = computePos(node_df, edge_df, xmax, ymax, dx, dy)
 
 
     #st.write("drawPlot3: ", node_df)
     #st.stop()
 
-    xscale = alt.Scale(domain=[0.,xmax])
+    xscale = alt.Scale(domain=[xmin, xmax])
     yscale = alt.Scale(domain=[0.,ymax])
 
+    #st.write("before createStep, node_df: ", node_df)
+
     # Create and draw edges as a series of horizontal and vertical lines
-    df_step = createStepLines(node_df, edge_df)
+    #df_step = createStepLines(node_df, edge_df)
     #st.write("df_step: ", df_step)
 
     # SAVE TO FILE
     node_df.to_csv("node_df.csv", index=0)
     edge_df.to_csv("edge_df.csv", index=0)
-    df_step.to_csv("df_step", index=0)
+    #df_step.to_csv("df_step", index=0)
 
-    layers = drawStepEdges(df_step, scale=xscale)
+    #layers = drawStepEdges(df_step, scale=xscale)
 
     # Set up tooltips searching via mouse movement
     node_nearest = alt.selection(type='single', nearest=True, on='mouseover',
@@ -785,9 +852,11 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmax, ymax, dx, dy, rect_color, t
         size=alt.value(10)
     )
 
+    st.write("Draw edges, edge_df: ", edge_df)
     # Create a data frame with as many columns as there are edges. 
     # Each column is four points. 
-    edges = alt.Chart(edge_df).mark_rule(
+    edges = alt.Chart(edge_df).mark_rule(   # all edges
+    #edges = alt.Chart(edge_df1).mark_rule(   # removed edges
         strokeOpacity=1.0,
         stroke='yellow',
         strokeWidth=1.,
@@ -845,7 +914,8 @@ def drawPlot3(node_df, edge_df, which_tooltip, xmax, ymax, dx, dy, rect_color, t
 
     #full_chart = (layers + nodes) # + node_text + node_tooltips + mid_edges)
     #full_chart = (layers + node_text) # + edges + nodes + node_text + node_tooltips + mid_edges)
-    full_chart = (layers + edges + nodes + node_text + node_tooltips + mid_edges)
+    #full_chart = (layers + edges + nodes + node_text + node_tooltips + mid_edges)
+    full_chart = (edges + nodes + node_text + node_tooltips + mid_edges)
 
     # Chart Configuration
     full_chart = full_chart.configure_axisX(
