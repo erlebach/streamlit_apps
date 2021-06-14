@@ -526,13 +526,6 @@ def nbNonFloats(df):
 
 
 
-def makeFloatDf(df):
-    dff = df.copy()
-
-    for col in dfx.columns:
-        dff[col] = dfxx[col]
-    return dff
-
 # ============================================
 # Feeder Functions
 
@@ -2268,7 +2261,7 @@ def handleCityGraph(keep_early_arr, city, choice_ix, id_list, fsu, bookings_f, f
     return dfs
 
 #---------------------------------------------------------
-def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feeders, is_print=True, delay=45, flight_id_level=0):
+def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feeders, is_print=True, delay=45, flight_id_level=0, debug=False):
     """
     Given an inbound flight to PTY return the corresponding outbound flighs
     Return a tuple of Dataframes with node and edges
@@ -2407,11 +2400,17 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         if fsu_pax.shape[0] == 0:
             continue
 
-        sch_dep_tmz = fsu_pax.SCH_DEP_TMZ.values[0]
-        sch_arr_tmz = fsu_pax.SCH_ARR_TMZ.values[0]
+        #st.write("fsu_inbound: ", fsu_inbound.SCH_DEP_TMZ)
+        #st.write("inbound: " , flight_id)
+        #st.write("fsu_pax: ", fsu_pax[['id','SCH_DEP_TMZ']])
+        #sch_dep_tmz = fsu_pax.SCH_DEP_TMZ.values[0]
+        #sch_arr_tmz = fsu_pax.SCH_ARR_TMZ.values[0]
+        sch_dep_tmz = fsu_inbound.SCH_DEP_TMZ.values[0]
+        sch_arr_tmz = fsu_inbound.SCH_ARR_TMZ.values[0]
 
         row_f = {'id':inbound, 'arr_delay':arr_delay, 'dep_delay':dep_delay, 'od':od, 'lev':flight_id_level, 'FLT_NUM':flt_num, 'TAIL':tail, 'SCH_DEP_TMZ':sch_dep_tmz, 'SCH_ARR_TMZ':sch_arr_tmz}
         #st.write(row_f)
+        #print(type(fsu_inbound))
 
         d_nf.loc[-1] = row_f
         # drop=True: do not keep the new index column created by default
@@ -2427,15 +2426,22 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         # Why isn't IN_DTMZ a scalar like in the method handleCitiesGraph()?
         available = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.IN_DTMZ.values[0]) / 1e9 / 60
         planned = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.SCH_ARR_DTMZ.values[0]) / 1e9 / 60
+        if debug:
+            st.write("id: ", fsu_inbound.id)
+            st.write("inbound arrival: ", fsu_inbound.SCH_ARR_TMZ)
+            st.write("outbound departure: ", fsu_outbound[['id','SCH_DEP_TMZ']])
+            st.write("planned: ", planned);
 
-        pax_id_nf = fsu_pax.id_nf_y
-        pax_id_f  = fsu_pax.id_f_y
-        pax_avail = (fsu_pax.SCH_DEP_DTMZ - fsu_inbound.IN_DTMZ.values[0]) / 1e9 / 60
-        pax_planned = (fsu_pax.SCH_DEP_DTMZ - fsu_inbound.SCH_ARR_DTMZ) / 1e9 / 60
+        #pax_id_nf = fsu_pax.id_nf_y
+        #pax_id_f  = fsu_pax.id_f_y
+        #pax_avail = (fsu_pax.SCH_DEP_DTMZ - fsu_inbound.IN_DTMZ.values[0]) / 1e9 / 60
+        #pax_planned = (fsu_pax.SCH_DEP_DTMZ - fsu_inbound.SCH_ARR_DTMZ) / 1e9 / 60
+        #if debug:
+            #st.write("pax planned: ", pax_planned);
 
         #st.write("planned, pax_planned: ", planned, pax_planned)
         #st.write("available, pax_avail: ", available, pax_avail)
-        dfx = pd.DataFrame([pax_id_f, pax_id_nf, pax_avail, pax_planned]).transpose()
+        #dfx = pd.DataFrame([pax_id_f, pax_id_nf, pax_avail, pax_planned]).transpose()
         #st.write("1 node_df: ", node_df)
 
         fsux = fsu[fsu['id'] == '2019/10/01SJOPTY10:29459']
@@ -2501,6 +2507,9 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         # Only the first ix
         #st.write(node_df)
         #st.write(edge_df)
+
+        if debug: 
+            st.write("edge_df: ", edge_df)
         return node_df, edge_df
 
 #---------------------------------------------------------

@@ -679,6 +679,8 @@ def convertIdsToInts(node_df, edge_df):
 #-------------------------------------------------------------
 def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_color):
 
+    st.write("Enter drawsPlot3d, edge_df: ", edge_df)
+
     nb_nodes = node_df.shape[0]
     nb_edges = edge_df.shape[0]
 
@@ -696,10 +698,10 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
     # transform all ids into integers. Create dictionary str_id ==> int_id
     # no concern for efficiency since this is for debugging Walker's algorithm
 
-    node_df, edge_df = convertIdsToInts(node_df, edge_df)
+    #node_df, edge_df = convertIdsToInts(node_df, edge_df)
 
-    st.write("node_df: ", node_df)
-    st.write("edge_df: ", edge_df)
+    #st.write("node_df: ", node_df)
+    #st.write("edge_df: ", edge_df)
 
     # For debugging
     # node_df, edge_df = restrictNumberOfNodes(node_df, edge_df)
@@ -722,6 +724,8 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
     #st.write("edge_structure: ", edge_structure)
     if edge_structure == 'Tree':
         edge_df = edge_df1.copy()
+
+    #st.write("after walker, edge_df: ", edge_df)
 
 
     w_nodes_df = pd.read_csv("w_node_df")
@@ -748,13 +752,6 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
     yscale = alt.Scale(domain=[0.,ymax])
 
     # Create and draw edges as a series of horizontal and vertical lines
-    #df_step = createStepLines(node_df, edge_df)
-
-    # SAVE TO FILE
-    node_df.to_csv("node_df.csv", index=0)
-    edge_df.to_csv("edge_df.csv", index=0)
-
-
     #layers = drawStepEdges(df_step, scale=xscale)
 
     # Set up tooltips searching via mouse movement
@@ -763,10 +760,6 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
 
     edge_nearest = alt.selection(type='single', nearest=True, on='mouseover',
                         fields=['x_mid','y_mid'], empty='none')
-
-    lookup_data = alt.LookupData(
-        node_df, key="id", fields=["x", "y"]
-    )
 
     lookup_data = alt.LookupData(
         node_df, key="id", fields=["x", "y"]
@@ -806,13 +799,10 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
         size=alt.value(10)
     )
 
-    #st.write("Draw edges, edge_df: ", edge_df)
-    # Create a data frame with as many columns as there are edges. 
-    # Each column is four points. 
-    edges = alt.Chart(edge_df).mark_rule(   # all edges
+    edges_base = alt.Chart(edge_df).mark_rule(   # all edges
         strokeOpacity=1.0,
         stroke='yellow',
-        strokeWidth=1.,
+        #strokeWidth=10.,
     ).encode(
         x = alt.X('x:Q', scale=xscale),
         y = 'y:Q',
@@ -820,6 +810,9 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
         y2 = 'y2:Q',
         #stroke = 'pax:Q',
         #strokeWidth = 'pax:Q' #'scaled_pax:Q'
+        #strokeWidth = 'xstroke:Q' #'scaled_pax:Q'
+    ).transform_calculate(
+        xstroke = 'datum.pax * 100'
     ).transform_lookup(
         # extract all flights with 'origin' from airports (state, lat, long)
         lookup='id_f_y',   # needed to draw the line. 'origin' is in flights_airport.csv
@@ -831,7 +824,9 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
         as_=['x2', 'y2']
     )
 
-    mid_edges = alt.Chart(edge_df).mark_circle(color='yellow', size=200, opacity=0.8).encode(
+    edges = edges_base
+
+    mid_edges_base = alt.Chart(edge_df).mark_circle(color='yellow', size=200, opacity=0.05).encode(
         x = alt.X('mid_x:Q', scale=xscale),
         y = 'mid_y:Q',
         tooltip= ['avail','planned','delta','pax']
@@ -844,32 +839,110 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
         lookup='id_nf_y',
         from_=lookup_data,
         as_=['x2', 'y2']
-    ).transform_calculate(
-        mid_x = '0.5*(datum.x2 + datum.x)',
-        mid_y = '0.5*(datum.y2 + datum.y)'
+    )
+
+    mid_edges1 = mid_edges_base.transform_calculate(
+        mid_x = 'datum.x + 0.8*(datum.x2 - datum.x)',
+        mid_y = 'datum.y + 0.8*(datum.y2 - datum.y)'
+    )
+    mid_edges2 = mid_edges_base.transform_calculate(
+        mid_x = 'datum.x + 0.5*(datum.x2 - datum.x)',
+        mid_y = 'datum.y + 0.5*(datum.y2 - datum.y)'
+    )
+    mid_edges3 = mid_edges_base.transform_calculate(
+        mid_x = 'datum.x + 0.2*(datum.x2 - datum.x)',
+        mid_y = 'datum.y + 0.2*(datum.y2 - datum.y)'
     )
 
     if which_tooltip == 'Edge':
-        mid_edges = mid_edges.add_selection(
-            edge_nearest
-        )
+        mid_edges1 = mid_edges1.add_selection(edge_nearest)
+        mid_edges2 = mid_edges2.add_selection(edge_nearest)
+        mid_edges3 = mid_edges3.add_selection(edge_nearest)
     elif which_tooltip == 'Node':
-        node_tooltips = node_tooltips.add_selection(
-            node_nearest
-        )
+        node_tooltips = node_tooltips.add_selection(node_nearest)
     elif which_tooltip == 'Off':
         pass
 
-    #full_chart = (layers + nodes) # + node_text + node_tooltips + mid_edges)
-    #full_chart = (layers + node_text) # + edges + nodes + node_text + node_tooltips + mid_edges)
-    #full_chart = (layers + edges + nodes + node_text + node_tooltips + mid_edges)
-    full_chart = (edges + nodes + node_text + node_tooltips + mid_edges)
-    #full_chart = (nodes + node_tooltips)
-
-    # Chart Configuration
-    full_chart = full_chart.configure_axisX(
-        labels=True,
+    nodes_bottom = alt.Chart(node_df).mark_rect(
+        width=5,
+        height=5,
+        opacity=1.0,
+        color=rect_color,
+        align='center',
+    ).encode(
+        x = alt.X('x:Q', scale=xscale),
+        y = 'y:Q',
+    ).properties(
+        width=1000,
+        height=50,
     )
+
+    # CONSTRUCT A BASE to avoid repetition
+    # edges_base and nodes_base
+    edges_bottom = edges_base.encode(
+    ).properties(
+        width=1000,
+        height=50,
+    )
+
+    #--------------------------------
+    # TODO: Click on a node, and light up the edges that link to that node. 
+    # I have an example that does this. 
+
+
+    # configure the mark
+    node_brush = alt.selection(type='interval')
+    # Does not work
+    #node_brush = alt.selection_interval(type='interval', encodings=['x','y','x2','y2'])
+
+    # configure the mark
+    brush = alt.selection_interval(encodings=['x'], empty='all')
+
+    nodes_bottom = nodes_bottom.add_selection(brush).encode(
+        color = alt.condition(brush, alt.value('yellow'), alt.value('blue'))
+    )
+    edges_bottom = edges_bottom.mark_rule(
+        strokeWidth=1
+    ).transform_filter(
+        brush
+    ).encode(
+        stroke = alt.condition(brush, alt.value('yellow'), alt.value('blue'))
+    )
+
+    nodes = nodes.transform_filter(brush).encode(
+        x = alt.X('x:Q', scale=alt.Scale(domain=brush))
+    ).add_selection(
+        node_brush
+    )
+
+    edges = edges.transform_filter(brush).encode(
+        x = alt.X('x:Q', scale=alt.Scale(domain=brush))
+    ).transform_filter(
+        node_brush
+    )
+
+    mid_edges1 = mid_edges1.transform_filter(brush).encode(
+        x = alt.X('mid_x:Q', scale=alt.Scale(domain=brush))
+    )
+    mid_edges2 = mid_edges2.transform_filter(brush).encode(
+        x = alt.X('mid_x:Q', scale=alt.Scale(domain=brush))
+    )
+    mid_edges3 = mid_edges3.transform_filter(brush).encode(
+        x = alt.X('mid_x:Q', scale=alt.Scale(domain=brush))
+    )
+    #----------------------
+
+    #full_chart = (layers + edges + nodes + node_text + node_tooltips + mid_edges)
+    full_chart = (edges + nodes + node_text + node_tooltips + mid_edges1 + mid_edges2 + mid_edges3).properties(
+        height=500,
+        width=1000,
+    )
+
+    #----------------------------------
+        
+    bottom = nodes_bottom + edges_bottom
+ 
+    full_chart = full_chart & bottom
 
     return full_chart
 

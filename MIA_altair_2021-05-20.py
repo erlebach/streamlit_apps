@@ -107,7 +107,7 @@ cities = fsu[fsu['OD'].str[0:3] != 'PTY'].loc[:,'OD'].str[0:3].unique()
 init_ix = int(np.where(cities == 'SJO')[0][0])
 
 which_city = st.sidebar.selectbox("Select a City: ", cities, index=init_ix)
-delay = st.sidebar.slider("Keep Connection times less than (min)", 0, 120, value=70)
+delay = st.sidebar.slider("Keep Connection times less than (min)", 0, 420, value=70)
 
 #xmax = st.sidebar.slider("Domain size in X", 0, 15, 2)
 #xmin = col1.number_input("Min X", -100., value=-10.)
@@ -145,10 +145,15 @@ which_tooltip = col1.radio("Tooltips:", ['Node','Edge','Off'], index=2)
 keep_early_arr = col1.checkbox("Keep early arrivals", value=True) 
 edge_structure = col1.radio("Edges:", ['Graph','Tree'], index=0)
 
+#fid = '2019/10/01HAVPTY16:11372'
+#fx = fsu[fsu['id'] == fid].SCH_DEP_TMZ # correct
+#st.write("fx: ", fx)
+
 
 # I will need to call handleCityGraph with a specific 'id' (node id)
-flight_id = "2019/10/01SJOPTY18:44796"
+#flight_id = "2019/10/01SJOPTY18:44796"
 flight_id = which_fid
+#flight_id = fid  # For debugging
 #flight_id = '2019/10/01MDEPTY10:20532'  # FIGURE OUT coord issue!!
 result = u.handleCityGraphId(
             flight_id,
@@ -161,10 +166,14 @@ result = u.handleCityGraphId(
             delay=delay
         )
 
+
 if result == None:
     st.write("Nothing to show")
 else:
     node_df1, edge_df1 = result
+
+#st.write(node_df1)
+#st.write(node_df1[node_df1['id'] == fid]) # WRONG
 
 # Using nodes 1 (0-indexed) and beyond, determine the next flight leaving the city. 
 # Given an OD: ORIG-DEST, outbound from PTY, figure out the next inbound flight to PTY. 
@@ -310,6 +319,12 @@ if True:
     # Check via merge
     #st.write("bookings_nf: ", bookings_nf.sort_values('id_nf'), bookings_f.shape)
 
+    myid = "2019/10/01HAVPTY16:11372"
+    dbg = False
+    if fid == myid:
+        st.write("found ", myid)
+        dbg = True
+
     try:
         # Found in bookings: fid: 2019/10/01PUJPTY16:23569
         fds = bookings_f.set_index('id_f',drop=True).loc[fid]
@@ -328,6 +343,7 @@ if True:
             is_print=False, 
             delay=delay,
             flight_id_level=2,
+            debug=dbg,
         )
 
         if result == None:
@@ -350,6 +366,9 @@ if True:
     # Inefficient perhaps
         node_df1 = pd.concat([node_df1,node_df2.iloc[1:]])
         edge_df1 = pd.concat([edge_df1,edge_df2])
+
+        #if dbg: 
+            #st.write("after concat, edge_df1: ", edge_df1)
 
 #st.write("node_df1= ", node_df1)
 #st.write("edge_df1= ", edge_df1)
