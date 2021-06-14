@@ -241,9 +241,9 @@ pairs = tailDict(fsu)
 # Why is FSU required? 
 # The flight_id_level of the first node to add to the graph
 #st.write("First tier, before return flights: node_df1= ", node_df1)
-# some OD's missing. How
+# some OD's missing. 
 node_df1, edge_df1 = u.getReturnFlights(pairs, node_df1, edge_df1, dct, fsu, flight_id_level=2)
-#st.write("First tier, after return flights: node_df1= ", node_df1)
+
 
 nodes2 = node_df1.iloc[1:]
 outbound_ids = nodes2['id'].tolist()

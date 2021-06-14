@@ -809,7 +809,7 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
         x2 = 'x2:Q',
         y2 = 'y2:Q',
         #stroke = 'pax:Q',
-        #strokeWidth = 'pax:Q' #'scaled_pax:Q'
+        strokeWidth = 'pax:Q' #'scaled_pax:Q'
         #strokeWidth = 'xstroke:Q' #'scaled_pax:Q'
     ).transform_calculate(
         xstroke = 'datum.pax * 100'
@@ -891,8 +891,9 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
 
 
     # configure the mark
-    node_brush = alt.selection(type='interval')
-    # Does not work
+    #node_brush = alt.selection(type='interval', empty='None')
+    #node_brush = alt.selection_interval(empty='None') # does not work
+    node_brush = alt.selection_interval(empty='all') # does not work
     #node_brush = alt.selection_interval(type='interval', encodings=['x','y','x2','y2'])
 
     # configure the mark
