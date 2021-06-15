@@ -141,81 +141,14 @@ if day != default_day:
 # Return dictionary
 #which_handle = st.sidebar.radio("which handleCity?", ['handleCity','handleCityGraph'], index=1)
 
-which_tooltip = col1.radio("Tooltips:", ['Node','Edge','Off'], index=2)
+which_tooltip  = col1.radio("Tooltips:", ['Node','Edge','Off'], index=2)
 keep_early_arr = col1.checkbox("Keep early arrivals", value=True) 
+only_keep_late_dep  = col1.checkbox("Only keep late departures", value=False) 
 edge_structure = col1.radio("Edges:", ['Graph','Tree'], index=0)
 
 #fid = '2019/10/01HAVPTY16:11372'
 #fx = fsu[fsu['id'] == fid].SCH_DEP_TMZ # correct
 #st.write("fx: ", fx)
-
-
-# I will need to call handleCityGraph with a specific 'id' (node id)
-#flight_id = "2019/10/01SJOPTY18:44796"
-flight_id = which_fid
-#flight_id = fid  # For debugging
-#flight_id = '2019/10/01MDEPTY10:20532'  # FIGURE OUT coord issue!!
-result = u.handleCityGraphId(
-            flight_id,
-            keep_early_arr, 
-            id_list, 
-            fsu, 
-            bookings_f, 
-            feed, 
-            is_print=False, 
-            delay=delay
-        )
-
-
-if result == None:
-    st.write("Nothing to show")
-else:
-    node_df1, edge_df1 = result
-
-#st.write(node_df1)
-#st.write(node_df1[node_df1['id'] == fid]) # WRONG
-
-# Using nodes 1 (0-indexed) and beyond, determine the next flight leaving the city. 
-# Given an OD: ORIG-DEST, outbound from PTY, figure out the next inbound flight to PTY. 
-# Search the fsu table for DEST_ORIG, and find all flights whose departure time follows the 
-# arrival time of ORIG-DEST on the same day, although days can be tricky since a flight arriving at BSB at 
-# Flight departs for BSB at 20:42 (18:42 local time), and departs for PTY at 
-
-# Given 2019/10/01PTYBSB20:42205, find the next flights. 
-#st.write(id_list.columns)
-#st.write(node_df1)
-idd = id_list[id_list['id_nf'] == '2019/10/01PTYBSB20:42205']
-
-fsuu = fsu[fsu['OD'] == 'BSBPTY'][['id','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']]
-fsuu = fsu[fsu['OD'] == 'PTYBSB'][['id','OD','SCH_DEP_TMZ','SCH_ARR_TMZ']]
-
-if False:
-  for id in outbound_ids:
-    st.write("==> id: ", id)
-    #idd = id_list[id_list['id_nf'] == id]
-    st.write("idd: ", idd)
-    od = id[10:16]
-    st.write("od: ", od)
-    fsuu = fsu[fsu['OD'] == od][['id','OD','SCH_DEP_TMZ','SCH_ARR_TMZ','TAIL']]
-    st.write("fsuu= ", fsuu)
-    fsuu = fsu[fsu['OD'] == od][['id','OD','SCH_DEP_TMZ','SCH_ARR_TMZ','TAIL']]
-    st.write("fsuu= ", fsuu)
-
-#---------------------------------------------------------
-
-#-------------------------------------------
-
-# Concatenate f2 and f3 horizonally (axis=1)
-# Given a flight id, I want the connecting flight ID
-#fsu4 = pd.concat([fsu1, fsu2], axis=1) # not done correctly
-#st.write("fsu4= ", fsu4['id'])
-#st.write("fsu4.shape= ", fsu4.shape)
-
-# Given a flightId of flight F, return the closest connecting two flights with the departures later than and closest to F's scheduled arrival time. 
-dct = altsup.groupFSUbyTail1(fsu)
-#st.write("dct= ", dct)
-
-#tail_list = altsup.computeFlightPairs(fsu)
 
 def tailDict(fsu):
     """
@@ -233,33 +166,6 @@ def tailDict(fsu):
     flight_pairs = flight_pairs[flight_pairs['tail1'] == flight_pairs['tail2']]
     return flight_pairs.set_index('id1', drop=False)
 
-pairs = tailDict(fsu)
-#st.write(pairs)
-
-
-
-# Why is FSU required? 
-# The flight_id_level of the first node to add to the graph
-#st.write("First tier, before return flights: node_df1= ", node_df1)
-# some OD's missing. 
-node_df1, edge_df1 = u.getReturnFlights(pairs, node_df1, edge_df1, dct, fsu, flight_id_level=2)
-
-
-nodes2 = node_df1.iloc[1:]
-outbound_ids = nodes2['id'].tolist()
-nodes_lev2 = node_df1[node_df1['lev'] == 2]
-#st.write(node_df1)
-#st.write("nodes_lev2")
-#st.write(nodes_lev2)
-#st.stop()
-
-# lev 2 are inbounds to PTY
-#st.write("pairs: ", pairs)
-
-pairs1 = pairs.set_index('id1', drop=False)
-pairs2 = pairs.set_index('id2', drop=False)
-
-
 def outboundsSameTail(fid_list):
     #for fid in node_df1['id'].to_list():
     #for fid in nodes_lev2['id'].to_list():
@@ -274,68 +180,115 @@ def outboundsSameTail(fid_list):
         except: pass
     return new_outbounds
 
-### I would like to start from level 1 tails and track them to the end of the day. 
-#st.write("**** setup of fid_list ****")
-fid_list = node_df1[node_df1['lev'] == 1]['id'].values
-#st.write("fid_list= ", fid_list)
-new_outbounds = outboundsSameTail(fid_list)
-#st.write("New outbounds: ", new_outbounds)
-new_new_outbounds = outboundsSameTail(new_outbounds)
-#st.write("New new outbounds: ", new_new_outbounds)
-new_new_new_outbounds = outboundsSameTail(new_new_outbounds)
-#st.write("New new new outbounds: ", new_new_new_outbounds)
 
-# Given a list of inbound flights into PTY, produce a list of outbound flights
-inbounds = node_df1.groupby('lev').get_group(1)
+# I will need to call handleCityGraph with a specific 'id' (node id)
+#flight_id = "2019/10/01SJOPTY18:44796"
+flight_id = which_fid
+#flight_id = fid  # For debugging
+#flight_id = '2019/10/01MDEPTY10:20532'  # FIGURE OUT coord issue!!
+#flight_id =  '2019/10/01HAVPTY19:10247'
+should_continue = True
 
-#outbounds = fsu.set_index('id', drop=True).loc[inbounds.id]
+while True:
+    result = u.handleCityGraphId(
+            flight_id,
+            keep_early_arr, 
+            only_keep_late_dep, 
+            id_list, 
+            fsu, 
+            bookings_f, 
+            feed, 
+            is_print=False, 
+            delay=delay
+        )
 
-#st.write("inbounds lev 0: ", node_df1.groupby('lev').get_group(0))
-#st.write("inbounds lev 1: ", inbounds)
-#st.write("inbounds lev 2: ", node_df1.groupby('lev').get_group(2))
+    if result == None:
+        st.write("Nothing to show")
+        should_continue == False
+    else:
+        node_df1, edge_df1 = result
+        if node_df1.shape[0] == 0:
+            should_continue = False
+        #### NO NEED TO GO FURTHER. SO need different program structure!
 
-# Get second tier for flights
-#st.write("First tier: node_df1= ", node_df1)
-#ids = node_df1[node_df1['lev'] == 2]['id'].to_list()
+    if not should_continue:
+        break
 
-### ONLY if ids is not empty
+    # Using nodes 1 (0-indexed) and beyond, determine the next flight leaving the city. 
+    # Given an OD: ORIG-DEST, outbound from PTY, figure out the next inbound flight to PTY. 
+    # Search the fsu table for DEST_ORIG, and find all flights whose departure time follows the 
+    # arrival time of ORIG-DEST on the same day, although days can be tricky since a flight arriving at BSB at 
+    # Flight departs for BSB at 20:42 (18:42 local time), and departs for PTY at 
+    
+    #-------------------------------------------
 
-node_dct = {}
-edge_dct = {}
+    # Given a flightId of flight F, return the closest connecting two flights with the departures later than and closest to F's scheduled arrival time. 
+    dct = altsup.groupFSUbyTail1(fsu)
 
-ids = node_df1.groupby('lev').get_group(2)['id'].to_list()
-#st.write("ids for call to hand*Id*lev2", ids)
+    #tail_list = altsup.computeFlightPairs(fsu)
 
-# Next level of flights
-#st.write("=== Next level of flights ===")
-#st.write("ids= ", ids)
-#st.write("feeders: ", feeders.sort_values('id_f'), feeders.shape)
+    pairs = tailDict(fsu)
 
-if True:
-#if False:
-  for fid in ids:
-    #st.write("fid: ", fid)
-    # There are entries in bookings_f that are not in feeders!! HOW IS THAT POSSIBLE!
-    # Check via merge
-    #st.write("bookings_nf: ", bookings_nf.sort_values('id_nf'), bookings_f.shape)
+    if not should_continue:
+        break
 
-    myid = "2019/10/01HAVPTY16:11372"
-    dbg = False
-    if fid == myid:
-        st.write("found ", myid)
-        dbg = True
+    node_df1, edge_df1 = u.getReturnFlights(pairs, keep_early_arr, only_keep_late_dep, node_df1, edge_df1, dct, fsu, flight_id_level=2)
+
+    nodes2 = node_df1.iloc[1:]
+    outbound_ids = nodes2['id'].tolist()
+    nodes_lev2 = node_df1[node_df1['lev'] == 2]
+
+    pairs1 = pairs.set_index('id1', drop=False)
+    pairs2 = pairs.set_index('id2', drop=False)
+
+
+    # Given a list of inbound flights into PTY, produce a list of outbound flights
+    # There is no level 1. 
 
     try:
-        # Found in bookings: fid: 2019/10/01PUJPTY16:23569
-        fds = bookings_f.set_index('id_f',drop=True).loc[fid]
+        inbounds = node_df1.groupby('lev').get_group(1)
     except:
-        st.write("fid not found, except")
-        continue
-    #try:
-    if 1:
+        st.write("No inbounds with id: ", node_df1.id.values[0])
+        should_continue = False
+
+    if not should_continue:
+        break
+
+    ### ONLY if ids is not empty
+
+    node_dct = {}
+    edge_dct = {}
+
+    try:
+        ids = node_df1.groupby('lev').get_group(2)['id'].to_list()
+    except:
+        should_continue = False
+
+    if not should_continue:
+        break
+
+
+    for fid in ids:
+        # There are entries in bookings_f that are not in feeders!! HOW IS THAT POSSIBLE!
+        # Check via merge
+
+        myid = "2019/10/01HAVPTY16:11372"
+        dbg = False
+        #if fid == myid:
+            #st.write("found ", myid)
+            #dbg = True
+
+        try:
+            # Found in bookings: fid: 2019/10/01PUJPTY16:23569
+            fds = bookings_f.set_index('id_f',drop=True).loc[fid]
+        except:
+            st.write("fid not found, except")
+            continue
+ 
         result = u.handleCityGraphId(
             fid,
             keep_early_arr, 
+            only_keep_late_dep, 
             id_list, 
             fsu, 
             bookings_f, 
@@ -350,28 +303,18 @@ if True:
             continue
         else:
             node_df2, edge_df2 = result
-            
-    #except:
-        #st.write("Error in handleCityGraphId")
-        #st.write(traceback.print_exc())
-        #continue
+            if node_df2.shape[0] == 0:
+                continue
 
-    # Not sure what this is for
-        node_dct[fid] = node_df2
-        edge_dct[fid] = edge_df2
+        # The first row is the root node. So I can simply append these
+        # to the main node and edge structures
 
-    # The first row is the root node. So I can simply append these
-    # to the main node and edge structures
-
-    # Inefficient perhaps
+        # Inefficient perhaps
         node_df1 = pd.concat([node_df1,node_df2.iloc[1:]])
         edge_df1 = pd.concat([edge_df1,edge_df2])
 
-        #if dbg: 
-            #st.write("after concat, edge_df1: ", edge_df1)
+    break  # the while loop
 
-#st.write("node_df1= ", node_df1)
-#st.write("edge_df1= ", edge_df1)
 
 # Create a dictionary of node/edge pairs
 # I would like to connect the outbound city X to the inbounds from city X by a dotted line.

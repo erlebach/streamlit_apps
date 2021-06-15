@@ -24,7 +24,6 @@ def setPandasOptions():
     pd.set_option('display.max_seq_items', 100)
     pd.set_option('display.precision', 2)
 
-
 # ### Utility functions
 
 
@@ -2261,7 +2260,7 @@ def handleCityGraph(keep_early_arr, city, choice_ix, id_list, fsu, bookings_f, f
     return dfs
 
 #---------------------------------------------------------
-def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feeders, is_print=True, delay=45, flight_id_level=0, debug=False):
+def handleCityGraphId(flight_id, keep_early_arr, only_keep_late_dep, id_list, fsu, bookings_f, feeders, is_print=True, delay=45, flight_id_level=0, debug=False):
     """
     Given an inbound flight to PTY return the corresponding outbound flighs
     Return a tuple of Dataframes with node and edges
@@ -2270,7 +2269,7 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
 
       flight_id_level: level of flight_id in the graph network. The root has level zero. Children of flight_id have level 1, grandchildren of flight_id have level 2. Each leg of a flight increases the level by 1. 
     """
-    #st.write("enter handleCityGraphId")
+    st.write("enter handleCityGraphId")
 
     # I need to return two structures: nodes and edges. 
     # This pair of structures should be returned for each flight I am working with. 
@@ -2280,6 +2279,8 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
     #st.write("Enter handleCityGraph")
 
     inbound = flight_id
+    node_df = pd.DataFrame()
+    edge_df = pd.DataFrame()
     #city_inbounds = findCity(bookings_f, city)
 
     """
@@ -2297,8 +2298,6 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         nodes = []
 
         inbound = pd.DataFrame({'id':[inbound]})  # New, created from method argument
-        #st.write(inbound)
-
         try:
             nodes.append(inbound)
             fsu_inbound = fsu[fsu['id'] == inbound['id'].values[0]]
@@ -2312,35 +2311,23 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         # passengers have time to connect
         #st.write("inbound_arr_delay= ", inbound_arr_delay)  # DF
 
+        # Do not keep early arrivals
+        # If the inbound (into PTY) is early, ignore subsequent flights
         if keep_early_arr == False and inbound_arr_delay < 0:
             st.write("continue")
             ## Must keep keep_early_arrivals to TRUE for now. 2021-06-07. 
             continue
 
+
         # just a collection of 'id_nf' ==> nodes
-        #st.write("inbound= ", inbound)
-        #st.write("id_list= ", id_list)
-        #inbound = inbound.values[0][0]
         inbound = inbound['id'].values[0]  # Series convert to list using .values
-        #st.write("inbound= ", inbound)
         outbounds = findOutboundIds(id_list, inbound).to_frame()
         outbounds['id_f'] = inbound
-        #st.write("outbounds= ", outbounds)
         nodes.extend(outbounds['id_nf'].tolist())  # This is the list of nodes
-
-        ## DEBUG: check whether "2019/10/01PTYROS20:16805" is in the outbounds['id_nf']
-        #nb_search = (outbounds['id_nf'] == '2019/10/01PTYROS20:16805').sum()
-        #st.write("nb_search= ", nb_search)
-
-        #if nb_search > 0: 
-            #st.write("ID FOUND: outbounds: ", outbounds)
-            ##st.stop()
-
 
         edges = outbounds['id_nf'].to_frame('e2')  # e2 is id_nf
         edges['e1'] = inbound   # e1 is id_f
         edges['id'] = edges['e1'] + '_' + edges['e2']
-
 
         # What is left to do is add the metadata to these lists
         # Nodes: the data comes from FSU files 
@@ -2369,6 +2356,11 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         id_f = fsu_pax.id_f_x
         id_nf = fsu_pax.id_nf_x
         # Node metadata
+        fsu_pax['dep_delay'] = (fsu_pax.OUT_DTMZ - fsu_pax.SCH_DEP_DTMZ) / 1e9 / 60
+
+        if only_keep_late_dep: 
+            fsu_pax = fsu_pax[fsu_pax['dep_delay'] > 0]
+
         dep_delay = (fsu_pax.OUT_DTMZ - fsu_pax.SCH_DEP_DTMZ) / 1e9 / 60
         arr_delay = (fsu_pax.IN_DTMZ  - fsu_pax.SCH_ARR_DTMZ) / 1e9 / 60   # outbound
         flt_num = fsu_pax.FLT_NUM
@@ -2378,7 +2370,7 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
         sch_arr_tmz = fsu_pax.SCH_ARR_TMZ
         node_nf_dict = {'id':id_nf, 'arr_delay':arr_delay, 'dep_delay':dep_delay, 'od':od, 'FLT_NUM':flt_num, 'TAIL':tail, 'SCH_DEP_TMZ':sch_dep_tmz, 'SCH_ARR_TMZ':sch_arr_tmz}
         d_nf = pd.DataFrame(node_nf_dict)
-        #st.write("d_nf= ", d_nf)
+        st.write("d_nf= ", d_nf)
 
         # Add feeder row
         # Find inbound in FSU data
@@ -2510,7 +2502,9 @@ def handleCityGraphId(flight_id, keep_early_arr, id_list, fsu, bookings_f, feede
 
         if debug: 
             st.write("edge_df: ", edge_df)
-        return node_df, edge_df
+
+        st.write("handle: node_df: ", node_df)
+    return node_df, edge_df
 
 #---------------------------------------------------------
 def handleCityGraphIdLev2_xxx(flight_id, keep_early_arr, id_list, fsu, bookings_f, feeders, is_print=True, delay=45, flight_id_level=0):
@@ -2729,7 +2723,7 @@ def handleCityGraphIdLev2_xxx(flight_id, keep_early_arr, id_list, fsu, bookings_
         return node_df, edge_df
 
 #---------------------------------------------------------
-def getReturnFlights(pairs, node_df, edge_df, dct, fsu, flight_id_level=0):
+def getReturnFlights(pairs, keep_early_arr, keep_late_dep, node_df, edge_df, dct, fsu, flight_id_level=0):
     # Scan each outbound flight on the graph and find the corresponding in inbound flight
     # pairs: pairs of ids (flight_from, flight_to) with identical tails
     #st.write("enter getReturn")
@@ -2746,7 +2740,7 @@ def getReturnFlights(pairs, node_df, edge_df, dct, fsu, flight_id_level=0):
     for i, outbound in enumerate(outbound_ids): 
         #ids = list(fsu1.index)
 
-        st.write("corresponding connection (same tail): ")
+        #st.write("corresponding connection (same tail): ")
         city = outbound[13:16]
 
         try:
@@ -2762,7 +2756,7 @@ def getReturnFlights(pairs, node_df, edge_df, dct, fsu, flight_id_level=0):
             # First departure from city X
             #inbound = inbounds_df.iloc[0].id
             inbound = next_fid.id2
-            st.write("-- inbound= ", inbound)
+            #st.write("-- inbound= ", inbound)
 
             # Perhaps add a channel for the line type (dashed or solid)
             # id_f refers to the source of the edge

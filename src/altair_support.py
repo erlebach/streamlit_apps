@@ -471,7 +471,7 @@ def misc_computations(fsu):
     # It appears that the first flight of each tail is an inbound flight into PTY. I wonder if that is always true.
     # Interest rows are the ones with 3,5,7 tails. I would expect the number of flights with a given tail to be an even number.
 
-    st.write(fsu.columns)
+    #st.write(fsu.columns)
     st.write("\n3 flights per day with the same tail")
     fss = fsu[fsu['nb_tails'] == 3].reset_index()[['id','FLT_NUM','TAIL','nb_tails','earliest_dep','SCH_DEP_TMZ','SCH_ARR_TMZ','OD','SCH_DEP_DTMZ']]
     st.write(fss.columns)
@@ -569,12 +569,12 @@ def transform_for_walker(node_df, edge_df):
         #st.write("Walker node id list: ", key, val, val.id)
         #st.write("++++++")
 
-    st.write(edge_df.columns)
+    #st.write(edge_df.columns)
     src = edge_df['id_f_y']
     dest = edge_df['id_nf_y']
 
-    st.write(node_df)
-    st.write(edge_df)
+    #st.write(node_df)
+    #st.write(edge_df)
 
     for s, d in zip(src, dest):
         nodes[d].parent = nodes[s]
@@ -679,7 +679,7 @@ def convertIdsToInts(node_df, edge_df):
 #-------------------------------------------------------------
 def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_color):
 
-    st.write("Enter drawsPlot3d, edge_df: ", edge_df)
+    #st.write("Enter drawsPlot3d, edge_df: ", edge_df)
 
     nb_nodes = node_df.shape[0]
     nb_edges = edge_df.shape[0]
@@ -698,7 +698,7 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
     # transform all ids into integers. Create dictionary str_id ==> int_id
     # no concern for efficiency since this is for debugging Walker's algorithm
 
-    #node_df, edge_df = convertIdsToInts(node_df, edge_df)
+    node_df, edge_df = convertIdsToInts(node_df, edge_df)
 
     #st.write("node_df: ", node_df)
     #st.write("edge_df: ", edge_df)
@@ -733,6 +733,9 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
     # merge with w_nodes to incorporate (x,y) into node_df
     # cannot use concat since the node orders might differ
     node_df = pd.merge(node_df, w_nodes_df, how='inner', on='id')
+
+    #node_df.to_csv("node_df.csv", index=0)
+    #edge_df.to_csv("edge_df.csv", index=0)
 
     # Compute extent of domain
     xmin = node_df.x.min()
@@ -769,11 +772,12 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
         width=20,
         height=20,
         opacity=1.0,
-        color=rect_color,
+        #color=rect_color,
         align='center',
     ).encode(
         x = alt.X('x:Q', scale=xscale),
         y = 'y:Q',
+        color='dep_delay:Z',
         #color = 'arr_delay', # not drawn if NaN
     )
 
@@ -1025,7 +1029,7 @@ def computePos(node_df, edge_df, xmax, ymax, dx, dy):
                 stack.append(v[i])
 
     node_df = node_df.reset_index()
-    st.write("nodes with x,y: ", node_df)
+    #st.write("nodes with x,y: ", node_df)
     return node_df
 
 #----------------------------------------------------------------------
