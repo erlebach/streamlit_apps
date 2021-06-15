@@ -754,6 +754,9 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
     xscale = alt.Scale(domain=[xmin, xmax])
     yscale = alt.Scale(domain=[0.,ymax])
 
+    color_palette = alt.Color('dep_delay:Q',
+          scale=alt.Scale(range=['green', 'red'], scheme='category10'))
+
     # Create and draw edges as a series of horizontal and vertical lines
     #layers = drawStepEdges(df_step, scale=xscale)
 
@@ -777,7 +780,8 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
     ).encode(
         x = alt.X('x:Q', scale=xscale),
         y = 'y:Q',
-        color='dep_delay:Z',
+        #color='dep_delay:Q',
+        color=color_palette
         #color = 'arr_delay', # not drawn if NaN
     )
 
@@ -830,7 +834,7 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
 
     edges = edges_base
 
-    mid_edges_base = alt.Chart(edge_df).mark_circle(color='yellow', size=200, opacity=0.05).encode(
+    mid_edges_base = alt.Chart(edge_df).mark_circle(color='yellow', size=200, opacity=0.15).encode(
         x = alt.X('mid_x:Q', scale=xscale),
         y = 'mid_y:Q',
         tooltip= ['avail','planned','delta','pax']
@@ -925,6 +929,10 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
     ).transform_filter(
         node_brush
     )
+
+    mid_edges1 = mid_edges1.transform_filter( node_brush )
+    mid_edges2 = mid_edges2.transform_filter( node_brush )
+    mid_edges3 = mid_edges3.transform_filter( node_brush )
 
     mid_edges1 = mid_edges1.transform_filter(brush).encode(
         x = alt.X('mid_x:Q', scale=alt.Scale(domain=brush))
