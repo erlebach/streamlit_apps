@@ -42,6 +42,15 @@ feeders = pd.read_csv("my_data/bookings_idlist_pax_date.csv.gz")
 fsu = pd.read_csv("my_data/node_attributes_df.csv.gz")
 id_list = pd.read_csv("my_data/id_list_date.csv.gz")
 
+def read_data(date):
+    date = date.replace('/','-')
+    st.write("date (with hyphens): ", date)
+    bookings_f = pd.read_csv("my_data/bookings_%s_f.csv.gz" % date)
+    bookings_nf = pd.read_csv("my_data//bookings_%s_nf.csv.gz" % date)
+    feeders = pd.read_csv("my_data/bookings_idlist_pax_%s.csv.gz" % date)
+    fsu = pd.read_csv("my_data/node_attributes_df.csv.gz" % date)
+    id_list = pd.read_csv("my_data/id_list_%s.csv.gz" % date)
+
 ### TO CHECK: 
 # - all id_f in bookings_f should be contained in feeders
 # - all id_nf in bookings_f should be contained in feeders
@@ -145,6 +154,10 @@ which_tooltip  = col1.radio("Tooltips:", ['Node','Edge','Off'], index=2)
 keep_early_arr = col1.checkbox("Keep early arrivals", value=True) 
 only_keep_late_dep  = col1.checkbox("Only keep late departures", value=False) 
 edge_structure = col1.radio("Edges:", ['Graph','Tree'], index=0)
+nb_levels = col1.radio("Nb of levels: ", [3,4], index=1)
+stroke_width = col1.selectbox("Edge Width: ", 
+        ['None', 'Avail Time', 'Planned Time','Pax'], index=0)
+st.write("stroke_width: ", stroke_width)
 
 #fid = '2019/10/01HAVPTY16:11372'
 #fx = fsu[fsu['id'] == fid].SCH_DEP_TMZ # correct
@@ -179,7 +192,6 @@ def outboundsSameTail(fid_list):
             new_outbounds.append(pairs1.loc[fid,'id2'])
         except: pass
     return new_outbounds
-
 
 # I will need to call handleCityGraph with a specific 'id' (node id)
 #flight_id = "2019/10/01SJOPTY18:44796"
@@ -267,6 +279,8 @@ while True:
     if not should_continue:
         break
 
+    if nb_levels == 3:
+        break
 
     for fid in ids:
         # There are entries in bookings_f that are not in feeders!! HOW IS THAT POSSIBLE!
@@ -328,7 +342,7 @@ edge_df = edge_df1.copy()
 if edge_df.shape[0] == 0:
     col2.write("Nothing to display: all passengers have sufficient connection time")
 else:
-    chart3 = altsup.drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_color)
+    chart3 = altsup.drawPlot3(node_df, edge_df, stroke_width, edge_structure, nb_levels, which_tooltip, rect_color, text_color)
     col2.altair_chart(chart3, use_container_width=True)
 
 st.stop()

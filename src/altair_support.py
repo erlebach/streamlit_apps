@@ -60,7 +60,6 @@ def createStepLines(node_df, edge_df, edge_labels=('id_f_y','id_nf_y')):
         # There is an error in edge array. There is one too many edges.
         # Must fix in getReturnFlights
 
-
         ids1a = pd.DataFrame([ids1.x, 0.5*(ids1.y+ids2.y)]).transpose()
         ids1b = pd.DataFrame([ids2.x, 0.5*(ids1.y+ids2.y)]).transpose()
  
@@ -677,7 +676,7 @@ def convertIdsToInts(node_df, edge_df):
 
 
 #-------------------------------------------------------------
-def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_color):
+def drawPlot3(node_df, edge_df, stroke_width, edge_structure, nb_levels, which_tooltip, rect_color, text_color):
 
     #st.write("Enter drawsPlot3d, edge_df: ", edge_df)
 
@@ -725,15 +724,19 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
     if edge_structure == 'Tree':
         edge_df = edge_df1.copy()
 
-    #st.write("after walker, edge_df: ", edge_df)
-
-
     w_nodes_df = pd.read_csv("w_node_df")
 
     # merge with w_nodes to incorporate (x,y) into node_df
     # cannot use concat since the node orders might differ
     node_df = pd.merge(node_df, w_nodes_df, how='inner', on='id')
 
+    # Categorize departure delays into bins: 
+    # The conversion to 'object' is due to bug wherein streamlit cannot display categorical variables
+    node_df['dep_delay_cat'] = pd.cut(node_df.dep_delay, bins=[-10000,0,5,15,30,60,10000], labels=['on time','0-5min','5-15min','15-30min','30-60min','> 60min']).astype('object')
+
+    edge_df['avail_cat'] = pd.cut(edge_df.avail, bins=[-10000,5,15,45,10000], labels=['< 5min','5-15min','15-45min','> 45min']).astype('object')
+
+    #st.write("1 node_df: ", node_df)
     #node_df.to_csv("node_df.csv", index=0)
     #edge_df.to_csv("edge_df.csv", index=0)
 
@@ -749,13 +752,28 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
     #st.write("min/max: ", xmin, xmax)
     #st.write("min/max: ", ymin, ymax)
 
-    #----------------------
+    #---------------------------------------
 
     xscale = alt.Scale(domain=[xmin, xmax])
     yscale = alt.Scale(domain=[0.,ymax])
 
-    color_palette = alt.Color('dep_delay:Q',
-          scale=alt.Scale(range=['green', 'red'], scheme='category10'))
+    color_palette = alt.Color('dep_delay_cat:N',
+        scale=alt.Scale(
+          domain=['on time','0-5min','5-15min','30-60min','>60min'],
+          range=['green', 'yellow', 'orange', 'red','darkred','black'], 
+          scheme='category10'
+        )
+    )
+
+    avail_palette = alt.Color('avail_cat:N',
+        scale=alt.Scale(
+          #domain=['< 5min','5-15min','15-45min','> 45min'],
+          #range=['darkred', 'red', 'orange', 'green'], 
+          domain=['> 45min', '15-45min', '5-15min', '< 5min'],
+          range=['green', 'orange', 'red', 'darkred'],
+          scheme='category10'
+        )
+    )
 
     # Create and draw edges as a series of horizontal and vertical lines
     #layers = drawStepEdges(df_step, scale=xscale)
@@ -772,18 +790,18 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
     )
 
     nodes = alt.Chart(node_df).mark_rect(
-        width=20,
+        width=40,
         height=20,
-        opacity=1.0,
+        #opacity=1.0,
         #color=rect_color,
         align='center',
     ).encode(
         x = alt.X('x:Q', scale=xscale),
         y = 'y:Q',
-        #color='dep_delay:Q',
         color=color_palette
-        #color = 'arr_delay', # not drawn if NaN
     )
+
+    #st.write("2 node_df: ", node_df)
 
     node_tooltips = alt.Chart(node_df).mark_circle(
         size=500,
@@ -792,7 +810,7 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
         #x = 'x:Q',
         x = alt.X('x:Q', scale=xscale),
         y = 'y:Q',
-        tooltip=['id','SCH_DEP_TMZ','SCH_ARR_TMZ','arr_delay','dep_delay','od','FLT_NUM','TAIL','x','y']
+        tooltip=['id','od','SCH_DEP_TMZ','SCH_ARR_TMZ','arr_delay','dep_delay','dep_delay_cat','FLT_NUM','TAIL','x','y']
     )
 
     node_text = alt.Chart(node_df).mark_text(
@@ -807,34 +825,57 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
         size=alt.value(10)
     )
 
-    edges_base = alt.Chart(edge_df).mark_rule(   # all edges
+    if stroke_width == 'None':
+        sw = alt.value(1)
+    elif stroke_width == 'Avail Time': 
+        sw = 'avail:Q'
+    elif stroke_width == 'Planned Time': 
+        sw = 'planned:Q'
+    elif stroke_width == 'Pax': 
+        sw = 'pax:Q'
+    else: 
+      st.write("Unknown stroke_width selection")
+      sw = alt.value(1)
+
+    st.write("edge_df= ", edge_df)
+
+    edges_base = alt.Chart(edge_df).mark_rule( 
         strokeOpacity=1.0,
         stroke='yellow',
-        #strokeWidth=10.,
     ).encode(
         x = alt.X('x:Q', scale=xscale),
         y = 'y:Q',
         x2 = 'x2:Q',
         y2 = 'y2:Q',
-        #stroke = 'pax:Q',
-        strokeWidth = 'pax:Q' #'scaled_pax:Q'
+        stroke = avail_palette,
+        strokeWidth = 'pax:Q',
+        #strokeWidth = 'y:Q', #'scaled_pax:Q'
+        #strokeWidth = alt.value(0.5), #'xstroke:Q', #'avail:Q',
         #strokeWidth = 'xstroke:Q' #'scaled_pax:Q'
     ).transform_calculate(
-        xstroke = 'datum.pax * 100'
-    ).transform_lookup(
-        # extract all flights with 'origin' from airports (state, lat, long)
-        lookup='id_f_y',   # needed to draw the line. 'origin' is in flights_airport.csv
-        from_=lookup_data
-    ).transform_lookup(
-        # extract all flights with 'destination' from airports (state, lat, long) renamed (state, lat2, long2)
+        #xstroke = 'datum.pax * 100'
+        xstroke = '100'
+    )
+
+    edges_base_1 = edges_base.transform_lookup(
         lookup='id_nf_y',
         from_=lookup_data,
         as_=['x2', 'y2']
+    ).transform_lookup(
+        lookup='id_f_y', 
+        from_=lookup_data
     )
 
-    edges = edges_base
+    edges_base_2 = edges_base.transform_lookup(
+        lookup='id_f_y',
+        from_=lookup_data,
+        as_=['x2', 'y2']
+    ).transform_lookup(
+        lookup='id_nf_y', 
+        from_=lookup_data
+    )
 
-    mid_edges_base = alt.Chart(edge_df).mark_circle(color='yellow', size=200, opacity=0.15).encode(
+    mid_edges_base = alt.Chart(edge_df).mark_circle(color='yellow', size=200, opacity=0.05).encode(
         x = alt.X('mid_x:Q', scale=xscale),
         y = 'mid_y:Q',
         tooltip= ['avail','planned','delta','pax']
@@ -872,7 +913,7 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
         pass
 
     nodes_bottom = alt.Chart(node_df).mark_rect(
-        width=5,
+        width=10,
         height=5,
         opacity=1.0,
         color=rect_color,
@@ -887,20 +928,36 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
 
     # CONSTRUCT A BASE to avoid repetition
     # edges_base and nodes_base
-    edges_bottom = edges_base.encode(
-    ).properties(
-        width=1000,
-        height=50,
-    )
+    #edges_bottom = edges_base.encode(
+    #).properties(
+        #width=1000,
+        #height=50,
+    #)
 
     #--------------------------------
     # TODO: Click on a node, and light up the edges that link to that node. 
     # I have an example that does this. 
 
+    avail_legend_select = alt.selection_multi(fields=['avail_cat'], bind='legend')
+    dep_delay_legend_select = alt.selection_multi(fields=['dep_delay_cat'], bind='legend')
+
+    edges_base_1 = edges_base_1.add_selection(
+        avail_legend_select
+    ).encode(
+        opacity=alt.condition(avail_legend_select, alt.value(1), alt.value(0.2))
+    )
+
+    edges_base_2 = edges_base_2.transform_filter(
+        avail_legend_select
+    ).encode(
+        opacity=alt.condition(avail_legend_select, alt.value(1), alt.value(0.1))
+    )
+
 
     # configure the mark
     #node_brush = alt.selection(type='interval', empty='None')
     #node_brush = alt.selection_interval(empty='None') # does not work
+    # Does not work with fields=...
     node_brush = alt.selection_interval(empty='all') # does not work
     #node_brush = alt.selection_interval(type='interval', encodings=['x','y','x2','y2'])
 
@@ -908,27 +965,41 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
     brush = alt.selection_interval(encodings=['x'], empty='all')
 
     nodes_bottom = nodes_bottom.add_selection(brush).encode(
-        color = alt.condition(brush, alt.value('yellow'), alt.value('blue'))
+        # 'lightgray' color not working as expected. Nothing happening. 
+        # Actually, only the nodes are drawn a opposed to the area
+        color = alt.condition(brush, alt.value('yellow'), alt.value('red'))
     )
-    edges_bottom = edges_bottom.mark_rule(
-        strokeWidth=1
-    ).transform_filter(
-        brush
-    ).encode(
-        stroke = alt.condition(brush, alt.value('yellow'), alt.value('blue'))
-    )
+    #edges_bottom = edges_bottom.mark_rule(
+        #strokeWidth=1
+    #).transform_filter(
+        #brush
+    #).encode(
+        #stroke = alt.condition(brush, alt.value('yellow'), alt.value('blue'))
+    #)
 
     nodes = nodes.transform_filter(brush).encode(
         x = alt.X('x:Q', scale=alt.Scale(domain=brush))
     ).add_selection(
+        node_brush, dep_delay_legend_select,
+    ).encode(
+        opacity=alt.condition(dep_delay_legend_select, alt.value(1), alt.value(0.1))
+    )
+
+    node_text = node_text.transform_filter(
+        dep_delay_legend_select,
+    ).encode(
+        opacity=alt.condition(dep_delay_legend_select, alt.value(1), alt.value(0.1))
+    )
+
+    edges_base_1 = edges_base_1.transform_filter(
+        node_brush 
+    )
+
+    edges_base_2 = edges_base_2.transform_filter(
         node_brush
     )
 
-    edges = edges.transform_filter(brush).encode(
-        x = alt.X('x:Q', scale=alt.Scale(domain=brush))
-    ).transform_filter(
-        node_brush
-    )
+    edges = edges_base_1 + edges_base_2
 
     mid_edges1 = mid_edges1.transform_filter( node_brush )
     mid_edges2 = mid_edges2.transform_filter( node_brush )
@@ -953,7 +1024,7 @@ def drawPlot3(node_df, edge_df, edge_structure, which_tooltip, rect_color, text_
 
     #----------------------------------
         
-    bottom = nodes_bottom + edges_bottom
+    bottom = nodes_bottom # + edges_bottom
  
     full_chart = full_chart & bottom
 

@@ -1967,7 +1967,7 @@ def handleCity(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print=True
     # I need to return two structures: nodes and edges. 
 
     city_inbounds = findCity(bookings_f, city)
-    st.write("enter handleCity")
+    #st.write("enter handleCity")
 
     if choice_ix == 'all':
         min_ix = 0
@@ -2038,7 +2038,7 @@ def handleCity(city, choice_ix, id_list, fsu, bookings_f, feeders, is_print=True
         id_f = fsu_pax.id_f_x
         id_nf = fsu_pax.id_nf_x
         available = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().IN_DTMZ) / 1e9 / 60
-        wt.write("noID: available= ", available)
+        #st.write("noID: available= ", available)
         planned   = (fsu_outbound.SCH_DEP_DTMZ - fsu_inbound.transpose().SCH_ARR_DTMZ) / 1e9 / 60
         delta = planned - available   # = IN - SCH_ARR
         dep_delay = (fsu_pax.OUT_DTMZ - fsu_pax.SCH_DEP_DTMZ) / 1e9 / 60
@@ -2269,7 +2269,7 @@ def handleCityGraphId(flight_id, keep_early_arr, only_keep_late_dep, id_list, fs
 
       flight_id_level: level of flight_id in the graph network. The root has level zero. Children of flight_id have level 1, grandchildren of flight_id have level 2. Each leg of a flight increases the level by 1. 
     """
-    st.write("enter handleCityGraphId")
+    #st.write("enter handleCityGraphId")
 
     # I need to return two structures: nodes and edges. 
     # This pair of structures should be returned for each flight I am working with. 
@@ -2302,7 +2302,7 @@ def handleCityGraphId(flight_id, keep_early_arr, only_keep_late_dep, id_list, fs
             nodes.append(inbound)
             fsu_inbound = fsu[fsu['id'] == inbound['id'].values[0]]
         except:
-            st.write("except")
+            #st.write("except")
             continue
 
         inbound_arr_delay = fsu_inbound.ARR_DELAY_MINUTES.values[0]
@@ -2314,7 +2314,7 @@ def handleCityGraphId(flight_id, keep_early_arr, only_keep_late_dep, id_list, fs
         # Do not keep early arrivals
         # If the inbound (into PTY) is early, ignore subsequent flights
         if keep_early_arr == False and inbound_arr_delay < 0:
-            st.write("continue")
+            #st.write("continue")
             ## Must keep keep_early_arrivals to TRUE for now. 2021-06-07. 
             continue
 
@@ -2370,7 +2370,7 @@ def handleCityGraphId(flight_id, keep_early_arr, only_keep_late_dep, id_list, fs
         sch_arr_tmz = fsu_pax.SCH_ARR_TMZ
         node_nf_dict = {'id':id_nf, 'arr_delay':arr_delay, 'dep_delay':dep_delay, 'od':od, 'FLT_NUM':flt_num, 'TAIL':tail, 'SCH_DEP_TMZ':sch_dep_tmz, 'SCH_ARR_TMZ':sch_arr_tmz}
         d_nf = pd.DataFrame(node_nf_dict)
-        st.write("d_nf= ", d_nf)
+        #st.write("d_nf= ", d_nf)
 
         # Add feeder row
         # Find inbound in FSU data
@@ -2503,7 +2503,7 @@ def handleCityGraphId(flight_id, keep_early_arr, only_keep_late_dep, id_list, fs
         if debug: 
             st.write("edge_df: ", edge_df)
 
-        st.write("handle: node_df: ", node_df)
+        #st.write("handle: node_df: ", node_df)
     return node_df, edge_df
 
 #---------------------------------------------------------
