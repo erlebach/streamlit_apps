@@ -736,6 +736,10 @@ def drawPlot3(node_df, edge_df, stroke_width, edge_structure, nb_levels, which_t
 
     edge_df['avail_cat'] = pd.cut(edge_df.avail, bins=[-10000,5,15,45,10000], labels=['< 5min','5-15min','15-45min','> 45min']).astype('object')
 
+    #edge_df['pax_cat'] = pd.cut(edge_df.pax, bins=[-10000,5,10,30,10000], labels=['< 5','5-10','10-30','> 30']).astype('object')
+    edge_df['pax_cat'] = pd.cut(edge_df.pax, bins=[-10000,5,10,30,10000], labels=[0,1,2,3]).astype('object')
+
+
     #st.write("1 node_df: ", node_df)
     #node_df.to_csv("node_df.csv", index=0)
     #edge_df.to_csv("edge_df.csv", index=0)
@@ -774,6 +778,7 @@ def drawPlot3(node_df, edge_df, stroke_width, edge_structure, nb_levels, which_t
           scheme='category10'
         )
     )
+
 
     # Create and draw edges as a series of horizontal and vertical lines
     #layers = drawStepEdges(df_step, scale=xscale)
@@ -848,13 +853,13 @@ def drawPlot3(node_df, edge_df, stroke_width, edge_structure, nb_levels, which_t
         x2 = 'x2:Q',
         y2 = 'y2:Q',
         stroke = avail_palette,
-        strokeWidth = 'pax:Q',
+        strokeWidth = 'pax_cat:O',
         #strokeWidth = 'y:Q', #'scaled_pax:Q'
         #strokeWidth = alt.value(0.5), #'xstroke:Q', #'avail:Q',
         #strokeWidth = 'xstroke:Q' #'scaled_pax:Q'
     ).transform_calculate(
-        #xstroke = 'datum.pax * 100'
-        xstroke = '100'
+        xstroke = 'datum.pax * 100'
+        #xstroke = '100*datum.pax_cat'
     )
 
     edges_base_1 = edges_base.transform_lookup(
@@ -878,7 +883,7 @@ def drawPlot3(node_df, edge_df, stroke_width, edge_structure, nb_levels, which_t
     mid_edges_base = alt.Chart(edge_df).mark_circle(color='yellow', size=200, opacity=0.05).encode(
         x = alt.X('mid_x:Q', scale=xscale),
         y = 'mid_y:Q',
-        tooltip= ['avail','planned','delta','pax']
+        tooltip= ['avail','planned','delta','pax', 'pax_cat']
     ).transform_lookup(
         # extract all flights with 'origin' from airports (state, lat, long)
         lookup='id_f_y',   # needed to draw the line. 'origin' is in flights_airport.csv
@@ -926,56 +931,45 @@ def drawPlot3(node_df, edge_df, stroke_width, edge_structure, nb_levels, which_t
         height=50,
     )
 
-    # CONSTRUCT A BASE to avoid repetition
-    # edges_base and nodes_base
-    #edges_bottom = edges_base.encode(
-    #).properties(
-        #width=1000,
-        #height=50,
-    #)
-
     #--------------------------------
     # TODO: Click on a node, and light up the edges that link to that node. 
     # I have an example that does this. 
 
     avail_legend_select = alt.selection_multi(fields=['avail_cat'], bind='legend')
     dep_delay_legend_select = alt.selection_multi(fields=['dep_delay_cat'], bind='legend')
+    pax_legend_select = alt.selection_multi(fields=['pax_cat:O'], bind='legend')
+
+    node_brush = alt.selection_interval(empty='all') # does not work
+    brush = alt.selection_interval(encodings=['x'], empty='all')
 
     edges_base_1 = edges_base_1.add_selection(
-        avail_legend_select
+        avail_legend_select, pax_legend_select
+    ).transform_filter(
+        node_brush
     ).encode(
-        opacity=alt.condition(avail_legend_select, alt.value(1), alt.value(0.2))
+        #opacity=alt.condition(avail_legend_select, alt.value(1), alt.value(0.2))
+        #opacity=alt.condition(pax_legend_select, alt.value(1), alt.value(0.1))
+        opacity=alt.condition(pax_legend_select & avail_legend_select, alt.value(1), alt.value(0.1))
     )
 
     edges_base_2 = edges_base_2.transform_filter(
         avail_legend_select
+    ).transform_filter(
+        pax_legend_select
+    ).transform_filter(
+        node_brush
     ).encode(
-        opacity=alt.condition(avail_legend_select, alt.value(1), alt.value(0.1))
+        #opacity=alt.condition(avail_legend_select, alt.value(1), alt.value(0.1))
+        opacity=alt.condition(pax_legend_select & avail_legend_select, alt.value(1), alt.value(0.1))
+        #opacity=alt.condition(pax_legend_select, alt.value(1), alt.value(0.1))
     )
 
-
-    # configure the mark
-    #node_brush = alt.selection(type='interval', empty='None')
-    #node_brush = alt.selection_interval(empty='None') # does not work
-    # Does not work with fields=...
-    node_brush = alt.selection_interval(empty='all') # does not work
-    #node_brush = alt.selection_interval(type='interval', encodings=['x','y','x2','y2'])
-
-    # configure the mark
-    brush = alt.selection_interval(encodings=['x'], empty='all')
 
     nodes_bottom = nodes_bottom.add_selection(brush).encode(
         # 'lightgray' color not working as expected. Nothing happening. 
         # Actually, only the nodes are drawn a opposed to the area
         color = alt.condition(brush, alt.value('yellow'), alt.value('red'))
     )
-    #edges_bottom = edges_bottom.mark_rule(
-        #strokeWidth=1
-    #).transform_filter(
-        #brush
-    #).encode(
-        #stroke = alt.condition(brush, alt.value('yellow'), alt.value('blue'))
-    #)
 
     nodes = nodes.transform_filter(brush).encode(
         x = alt.X('x:Q', scale=alt.Scale(domain=brush))
@@ -989,14 +983,6 @@ def drawPlot3(node_df, edge_df, stroke_width, edge_structure, nb_levels, which_t
         dep_delay_legend_select,
     ).encode(
         opacity=alt.condition(dep_delay_legend_select, alt.value(1), alt.value(0.1))
-    )
-
-    edges_base_1 = edges_base_1.transform_filter(
-        node_brush 
-    )
-
-    edges_base_2 = edges_base_2.transform_filter(
-        node_brush
     )
 
     edges = edges_base_1 + edges_base_2
@@ -1020,7 +1006,7 @@ def drawPlot3(node_df, edge_df, stroke_width, edge_structure, nb_levels, which_t
     full_chart = (edges + nodes + node_text + node_tooltips + mid_edges1 + mid_edges2 + mid_edges3).properties(
         height=500,
         width=1000,
-    )
+    ) #.resolve_scale(color='independent').resolve_legend(opacity='independent')  
 
     #----------------------------------
         
